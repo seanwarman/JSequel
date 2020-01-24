@@ -155,7 +155,7 @@ group by bookingDivisions.bookingDivKey
 So you can only do one join like this at a time, meaning if we wanted to do two or more nested json records like this...well
 we can't.
 
-Shit. Scrub all that. It does work as a nested select...
+Shit. Scrub all that. It does work as a nested select... TODO
 ```slq
 SELECT
 (select JSON_ARRAYAGG(JSON_OBJECT("tmpName", divisionTemplates.tmpName, "tmpKey", divisionTemplates.tmpKey)) from divisionTemplates where divisionTemplates.bookingDivKey = bookingDivisions.bookingdivKey) as tmpsAmt,
@@ -164,5 +164,53 @@ bookingDivisions.bookingDivName
 from bookingDivisions
 ```
 Looks like sub selects are back on the table!
+
+Here's how it should work.
+
+```js
+name: 'bms_booking.bookings',
+columns: [
+  {name: 'bookingName'},
+  {name: 'bookingsKey'},
+  {name: 'createdUserKey'
+],
+where: [
+  'bookingsKey = "123"'
+]
+
+queryObj.columns.forEach(col => {
+  selects.push(
+
+  )
+})
+
+let select = `
+  (SELECT ${col.name} FROM ${queryObj.name} WHERE ${queryObj.where}) ${queryObj.as}
+  (SELECT ${col.name} FROM ${queryObj.name} WHERE ${queryObj.where}) ${queryObj.as}
+  (SELECT ${col.name} FROM ${queryObj.name} WHERE ${queryObj.where}) ${queryObj.as}
+`;
+```
+
+We only want to do it like the above if it's in one of the join columns.
+If we're in the top level (eg the first db.table selection) we want it to act normally.
+
+Finish fixing the function logic then move on to returning nested json records.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 

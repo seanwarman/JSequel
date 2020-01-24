@@ -7,7 +7,6 @@ module.exports = class JsonQL {
     this.select = ''
     this.from = '';
     this.where = '';
-    this.join = [];
 
     this.dbTableNames = [];
   }
@@ -19,32 +18,7 @@ module.exports = class JsonQL {
   selectQL(queryObj) {
 
     this.validateQueryObject(queryObj);
-    this.parseQueryObj(queryObj);
-
-    let select = '';
-    if(this.select.length > 0) {
-      select = `SELECT ${this.select}`;
-    }
-
-    let from = '';
-    if(this.from.length > 0) {
-      from = ` FROM ${this.from}`;
-    }
-
-    let join = '';
-    if(this.join.length > 0) {
-      join = ` ${this.join.map(j => j).join(' ')}`;
-    }
-
-    let where = '';
-    if(this.where.length > 0) {
-      where = ` HAVING ${this.where}`;
-    }
-
-    let limit = '';
-    if((this.limit || []).length > 0) {
-      limit = ` LIMIT ${this.limit}`;
-    }
+    let query = this.parseQueryObj(queryObj);
 
     if(this.fatalError) {
       return {
@@ -57,7 +31,7 @@ module.exports = class JsonQL {
     return {
       status: 'success',
       errors: this.errors,
-      query: `${select}${from}${join}${where}${limit}` 
+      query
     }
   }
   create(queryObj) {
@@ -73,47 +47,16 @@ module.exports = class JsonQL {
   // █░░█ █▄▄█ █▄▄▀ ▀▀█ █▀▀ █▄▄▀ ▀▀█
   // █▀▀▀ ▀░░▀ ▀░▀▀ ▀▀▀ ▀▀▀ ▀░▀▀ ▀▀▀
 
-  parseJoinObject(joinObj) {
-    const {db, table} = this.parseDbAndTableNames(joinObj.name);
-
-    this.join.push(
-      `LEFT JOIN ${db}.${table} ON ${joinObj.where.map(wh => 
-        typeof wh === 'object' ?
-        wh.map(w => w).join(' OR ')
-        :
-        wh
-      ).join(' AND ')}`
-    )
-
-    const select = `${
-      joinObj.columns.length > 0 ? 
-        joinObj.columns.map(col => {
-
-          if(/^\w+\.\w+$/g.test(col.name)) return this.parseJoinObject(col);
-          let name = this.setNameString(db, table, col.name);
-          if(col.as) {
-            name += ` AS ${col.as}`;
-          }
-          return name
-        }).join() 
-      : 
-      ''
-    }`;
-
-    const as = joinObj.as ? ` AS ${joinObj.as}` : '';
-
-    return `${select}${as}`;
-  }
-
   parseQueryObj(queryObj) {
     const {db, table} = this.parseDbAndTableNames(queryObj.name);
 
-    this.select = `${
+    let select = `SELECT ${
       queryObj.columns.length > 0 ? 
         queryObj.columns.map(col => {
 
-          if(/^\w+\.\w+$/g.test(col.name)) return this.parseJoinObject(col);
-          // Check the db, table and name here because we know that queryObj.name will be the right db and table for this col.name.
+          // If this name is a database selection we'll want to nest the new select inside the old one.
+          if(/^\w+\.\w+$/g.test(col.name)) return this.parseNestedQueryObj(col);
+
           let name = this.setNameString(db, table, col.name);
           if(col.as) {
             name += ` AS ${col.as}`;
@@ -124,14 +67,56 @@ module.exports = class JsonQL {
       ''
     }`;
 
-    this.from = `${queryObj.name}`
+    let from = ` FROM ${queryObj.name}`
 
-    this.where = (queryObj.where || []).length > 0 ? `${queryObj.where.map(wh => {
+    let where = (queryObj.where || []).length > 0 ? ` WHERE ${queryObj.where.map(wh => {
       if(wh.length && typeof wh === 'object') return wh.map(w => w).join(' OR ');
       return wh;
     }).join(' AND ')}` : '';
 
-    this.limit = queryObj.limit ? queryObj.limit.map(n => n).join() : '';
+    let limit = queryObj.limit ? ` LIMIT ${queryObj.limit.map(n => n).join()}` : '';
+
+    let as = '';
+    if(queryObj.as) {
+      as += ` AS ${queryObj.as}`;
+    }
+    return `(${select}${from}${where}${limit})${as}`;
+  }
+
+  parseNestedQueryObj(queryObj) {
+    const {db, table} = this.parseDbAndTableNames(queryObj.name);
+
+    if(queryObj.columns.length === 0) {
+      this.errors.push(`No columns included at ${db}.${table}`);
+      return '';
+    }
+    return queryObj.columns.map(col => {
+
+      if(/^\w+\.\w+$/g.test(col.name)) return this.parseNestedQueryObj(col);
+
+      let name = this.setNameString(db, table, col.name);
+      let as = ` AS ${col.name}`;
+      if(col.as) {
+        as = ` AS ${col.as}`;
+      }
+
+      let where = (queryObj.where || []).length > 0 ? ` WHERE ${queryObj.where.map(wh => {
+        if(wh.length && typeof wh === 'object') return wh.map(w => w).join(' OR ');
+        return wh;
+      }).join(' AND ')}` : '';
+
+      // The parent or the child objects can have a limit but the parent takes priority.
+      let limit = queryObj.limit ? 
+        ` LIMIT ${queryObj.limit.map(n => n).join()}` 
+        : 
+        col.limit ?
+        ` LIMIT ${col.limit.map(n => n).join()}` 
+        :
+        '';
+
+      return `(SELECT ${name} FROM ${queryObj.name}${where}${limit})${as}`;
+
+    }).join();
   }
 
   // █▀▀ ▀▀█▀▀ █▀▀█ ░▀░ █▀▀▄ █▀▀▀ █▀▀
