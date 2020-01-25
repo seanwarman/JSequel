@@ -149,14 +149,13 @@ module.exports = class JsonQL {
       /\w+\=\>|[\(\)]|[`"'](.*?)[`"']|\$*(\w+\.)+\w+|\$*\w+|\\|\/|\+|>=|<=|=>|>|<|-|\*|=/g
     );
 
-
-    console.log(func, columns);
     return this.convertFunc(func, columns, 0);
   }
 
   convertFunc(funcName, args, count) {
 
-    let thisFuncArgs = [];
+    let funcArgs = [];
+    let funcArgStrings = [];
     let done = false;
 
     args.forEach((a,i) => {
@@ -168,39 +167,41 @@ module.exports = class JsonQL {
 
 
       if(/^\w+\=\>/.test(a)) {
-        thisFuncArgs.push(this.convertFunc(a.slice(0,-2), args.slice(i+1), count));
+        funcArgStrings.push(this.convertFunc(a.slice(0,-2), args.slice(i+1), count));
+        funcArgs.push(this.convertFunc(a.slice(0,-2), args.slice(i+1), count));
         done = true;
         return;
       }
       if(!/\)|^\w+\=\>/.test(a)) {
-        thisFuncArgs.push(a);
+        funcArgStrings.push(a);
+        funcArgs.push(a);
         return;
       }
 
 
 
       if(/\)/.test(a) && count === 1) {
-        thisFuncArgs.length > 0 ?
-        thisFuncArgs[thisFuncArgs.length-1] += ')'
+        funcArgStrings.length > 0 ?
+        funcArgStrings[funcArgStrings.length-1] += ')'
         :
-        thisFuncArgs[0] = ')';
+        funcArgStrings[0] = ')';
         done = true;
         return;
       }
       if(/\)/.test(a)) {
-        thisFuncArgs.length > 0 ?
-        thisFuncArgs[thisFuncArgs.length-1] += ')'
+        funcArgStrings.length > 0 ?
+        funcArgStrings[funcArgStrings.length-1] += ')'
         :
-        thisFuncArgs[0] = ')';
+        funcArgStrings[0] = ')';
         count--;
 
       }
     });
 
     if((this.customFns || {})[funcName]) {
-      return this.customFns[funcName](...thisFuncArgs);
+      return this.customFns[funcName](...funcArgs);
     }
-    return `${funcName.toUpperCase()}(${thisFuncArgs.join()}`;
+    return `${funcName.toUpperCase()}(${funcArgStrings.join()}`;
 
   }
   // ░░▀ █▀▀█ █▀▀ ▀▀█▀▀ █▀▀█ ░▀░ █▀▀▄ █▀▀▀ █▀▀
