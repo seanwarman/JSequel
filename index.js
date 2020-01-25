@@ -141,13 +141,24 @@ module.exports = class JsonQL {
     let columns = name.slice(
       func.length + 2
     ).match(
-      /^\w+\=\>|[\$\w.]+|['`"].+['`"]|\\|\+|>=|<=|=>|>|<|-|\*|=/g
+      /\w+\=\>|[\(\)]|[`"'](.*?)[`"']|\$*(\w+\.)+\w+|\$*\w+|\\|\/|\+|>=|<=|=>|>|<|-|\*|=/g
     );
 
-    console.log(columns);
+    let args = (columns || []).reduce((str, arg) => {
 
-    // If there's a nested function we'll catch it here and re-run funcString.
-    return `${func}(${(columns || []).map(nm => /^\w+\=\>/.test(nm) ? this.funcString(db,table,nm) : nm).join()})`;
+      // TODO: we want to send the arguments down with convertFnString so that we can
+      // use them if we want to convert any of these into custom functions.
+
+      if(/^\w+\=\>/.test(arg)) return str + this.convertFnString(arg);
+      if(/\(/.test(arg)) return str + arg;
+      if(/\)/.test(arg) && /\,$/.test(str)) return str.slice(0,-1) + arg + ','; 
+      return str + arg + ',';
+
+    }, '').slice(0,-1);
+
+    console.log('args: ', args);
+
+    return `${func}${args}`;
   }
 
   // ░░▀ █▀▀█ █▀▀ ▀▀█▀▀ █▀▀█ ░▀░ █▀▀▄ █▀▀▀ █▀▀
@@ -196,6 +207,10 @@ module.exports = class JsonQL {
   // █░░█ ▀▀█▀▀ ░▀░ █░░ ░▀░ ▀▀█▀▀ ░▀░ █▀▀ █▀▀
   // █░░█ ░░█░░ ▀█▀ █░░ ▀█▀ ░░█░░ ▀█▀ █▀▀ ▀▀█
   // ░▀▀▀ ░░▀░░ ▀▀▀ ▀▀▀ ▀▀▀ ░░▀░░ ▀▀▀ ▀▀▀ ▀▀▀
+
+  convertFnString(fnName) {
+    return fnName.slice(0, -2).toUpperCase();
+  }
 
   parseDbAndTableNames(name) {
     const dbTable = /^\w+\.\w+$/
@@ -311,21 +326,20 @@ module.exports = class JsonQL {
         this.fatalError = true;
       }
     });
-
     return valid;
   }
 
   funcValid(db, table, name) {
     const func = name.slice(0, name.indexOf('=>'))
     let valid = false;
-    const columns = name.slice(func.length + 2).split(' ')
+    const columns = name.slice(func.length + 2).match(/\w+\=\>|[\(\)]|[`"'](.*?)[`"']|\$*(\w+\.)+\w+|\$*\w+|\\|\/|\+|>=|<=|=>|>|<|-|\*|=/g);
+    // No arguments return true.
+    if(!columns) return true; 
     columns.forEach(nm => {
       if(this.nameStringValid(db, table, nm)){
         valid = true;
       }
     });
-    // If there's no args to the fn we might still want to use it.
-    if(columns.length === 1 && (columns[0] || '').length === 0) valid = true;
     return valid;
   }
 

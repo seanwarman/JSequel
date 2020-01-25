@@ -194,23 +194,48 @@ let select = `
 We only want to do it like the above if it's in one of the join columns.
 If we're in the top level (eg the first db.table selection) we want it to act normally.
 
+
+
+
 Finish fixing the function logic then move on to returning nested json records.
 
+We want to find all the possible usefull variables in a name string.
+
+/\w+\=\>|[\(\)]|[`"'](.*?)[`"']|\$*(\w+\.)+\w+|\$*\w+|\\|\/|\+|>=|<=|=>|>|<|-|\*|=/g
+This regex gets all the things we want and it puts the braces as their own items
+which will help us to decide where everything is supposed to go in the function
+args.
 
 
+For nested record all you have to do is add an `as` param to the parent object.
 
+```js
+const query = {
+  name: 'bms_booking.bookings',
+  columns: [
+  {name: 'bookingName'},
+  {name: 'bookingsKey'},
+    {
+      name: 'bms_booking.uploads',
+      columns: [
+        {name: 'fileName'},
+        {name: 'uploadKey'}
+      ],
+      where: [
+       'bookings.bookingsKey = uploads.bookingsKey'
+      ],
+      as: 'uploads' // < here
+    }
+  ]
+}
 
-
-
-
-
-
-
-
-
-
-
-
-
-
+// result[0] = {
+//   bookingName: 'Cool Booking',
+//   bookingsKey: '123',
+//   uploads: [
+//     { filName: 'Great file', uploadKey: '1234' },
+//     { filName: 'Greater file', uploadKey: '12345' },
+//   ]
+// }
+```
 
