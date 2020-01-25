@@ -9,6 +9,11 @@ module.exports = class JsonQL {
     this.where = '';
 
     this.dbTableNames = [];
+    this.customFns = {};
+  }
+
+  custom(customFns) {
+    this.customFns = customFns;
   }
 
   // █▀▀ █▀▀█ █░░█ █▀▀▄   █▀▄▀█ █▀▀ ▀▀█▀▀ █░░█ █▀▀█ █▀▀▄ █▀▀
@@ -144,23 +149,60 @@ module.exports = class JsonQL {
       /\w+\=\>|[\(\)]|[`"'](.*?)[`"']|\$*(\w+\.)+\w+|\$*\w+|\\|\/|\+|>=|<=|=>|>|<|-|\*|=/g
     );
 
-    let args = (columns || []).reduce((str, arg) => {
 
-      // TODO: we want to send the arguments down with convertFnString so that we can
-      // use them if we want to convert any of these into custom functions.
-
-      if(/^\w+\=\>/.test(arg)) return str + this.convertFnString(arg);
-      if(/\(/.test(arg)) return str + arg;
-      if(/\)/.test(arg) && /\,$/.test(str)) return str.slice(0,-1) + arg + ','; 
-      return str + arg + ',';
-
-    }, '').slice(0,-1);
-
-    console.log('args: ', args);
-
-    return `${func}${args}`;
+    console.log(func, columns);
+    return this.convertFunc(func, columns, 0);
   }
 
+  convertFunc(funcName, args, count) {
+
+    let thisFuncArgs = [];
+    let done = false;
+
+    args.forEach((a,i) => {
+      if(done) return;
+      if(/\(/.test(a)) {
+        count++;
+        return;
+      }
+
+
+      if(/^\w+\=\>/.test(a)) {
+        thisFuncArgs.push(this.convertFunc(a.slice(0,-2), args.slice(i+1), count));
+        done = true;
+        return;
+      }
+      if(!/\)|^\w+\=\>/.test(a)) {
+        thisFuncArgs.push(a);
+        return;
+      }
+
+
+
+      if(/\)/.test(a) && count === 1) {
+        thisFuncArgs.length > 0 ?
+        thisFuncArgs[thisFuncArgs.length-1] += ')'
+        :
+        thisFuncArgs[0] = ')';
+        done = true;
+        return;
+      }
+      if(/\)/.test(a)) {
+        thisFuncArgs.length > 0 ?
+        thisFuncArgs[thisFuncArgs.length-1] += ')'
+        :
+        thisFuncArgs[0] = ')';
+        count--;
+
+      }
+    });
+
+    if((this.customFns || {})[funcName]) {
+      return this.customFns[funcName](...thisFuncArgs);
+    }
+    return `${funcName.toUpperCase()}(${thisFuncArgs.join()}`;
+
+  }
   // ░░▀ █▀▀█ █▀▀ ▀▀█▀▀ █▀▀█ ░▀░ █▀▀▄ █▀▀▀ █▀▀
   // ░░█ █░░█ ▀▀█ ░░█░░ █▄▄▀ ▀█▀ █░░█ █░▀█ ▀▀█
   // █▄█ ▀▀▀█ ▀▀▀ ░░▀░░ ▀░▀▀ ▀▀▀ ▀░░▀ ▀▀▀▀ ▀▀▀
@@ -208,9 +250,6 @@ module.exports = class JsonQL {
   // █░░█ ░░█░░ ▀█▀ █░░ ▀█▀ ░░█░░ ▀█▀ █▀▀ ▀▀█
   // ░▀▀▀ ░░▀░░ ▀▀▀ ▀▀▀ ▀▀▀ ░░▀░░ ▀▀▀ ▀▀▀ ▀▀▀
 
-  convertFnString(fnName) {
-    return fnName.slice(0, -2).toUpperCase();
-  }
 
   parseDbAndTableNames(name) {
     const dbTable = /^\w+\.\w+$/

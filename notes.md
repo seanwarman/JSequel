@@ -207,7 +207,7 @@ which will help us to decide where everything is supposed to go in the function
 args.
 
 
-For nested record all you have to do is add an `as` param to the parent object.
+For a nested record all you have to do is add an `as` param to the parent object.
 
 ```js
 const query = {
