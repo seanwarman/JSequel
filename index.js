@@ -74,7 +74,8 @@ module.exports = class JsonQL {
 
     let from = ` FROM ${queryObj.name}`
 
-    let where = (queryObj.where || []).length > 0 ? ` WHERE ${queryObj.where.map(wh => {
+    // The outer parent object finds using a HAVING but the nested one's use WHERE.
+    let where = (queryObj.where || []).length > 0 ? ` HAVING ${queryObj.where.map(wh => {
       if(wh.length && typeof wh === 'object') return wh.map(w => w).join(' OR ');
       return wh;
     }).join(' AND ')}` : '';

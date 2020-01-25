@@ -201,11 +201,18 @@ Finish fixing the function logic then move on to returning nested json records.
 
 We want to find all the possible usefull variables in a name string.
 
+```js
 /\w+\=\>|[\(\)]|[`"'](.*?)[`"']|\$*(\w+\.)+\w+|\$*\w+|\\|\/|\+|>=|<=|=>|>|<|-|\*|=/g
+```
+
 This regex gets all the things we want and it puts the braces as their own items
 which will help us to decide where everything is supposed to go in the function
 args.
 
+Functions work great but we can't yet have custom functions until I make the function parser
+a bit smarter.
+
+I'll have to leave custom functions as a future feature for now.
 
 For a nested record all you have to do is add an `as` param to the parent object.
 
@@ -219,7 +226,7 @@ const query = {
       name: 'bms_booking.uploads',
       columns: [
         {name: 'fileName'},
-        {name: 'uploadKey'}
+        {name: 'uploadKey', as: 'tmpUploadKey'}
       ],
       where: [
        'bookings.bookingsKey = uploads.bookingsKey'
@@ -229,12 +236,19 @@ const query = {
   ]
 }
 
-// result[0] = {
+//  SELECT
+//  bookingName,
+//  bookingsKey,
+//  (select JSON_ARRAYAGG(JSON_OBJECT("fileName", uploads.fileName, "tmpUploadKey", uploads.uploadKey)) from uploads where bookings.bookingsKey = uploads.bookingsKey) as uploads
+//  from bms_booking.bookings
+
+
+//  result[0] = {
 //   bookingName: 'Cool Booking',
 //   bookingsKey: '123',
 //   uploads: [
-//     { filName: 'Great file', uploadKey: '1234' },
-//     { filName: 'Greater file', uploadKey: '12345' },
+//     { filName: 'Great file', tmpUploadKey: '1234' },
+//     { filName: 'Greater file', tmpUploadKey: '12345' },
 //   ]
 // }
 ```
