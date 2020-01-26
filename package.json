@@ -1,0 +1,28 @@
+{
+  "name": "jsequel",
+  "version": "0.0.1",
+  "description": "A GraphQL-like json query maker",
+  "main": "index.js",
+  "directories": {
+    "test": "test"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/seanwarman/JSequel.git"
+  },
+  "keywords": [
+    "mysql",
+    "graphql",
+    "serverless",
+    "json"
+  ],
+  "author": "Sean Warman",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/seanwarman/JSequel/issues"
+  },
+  "homepage": "https://github.com/seanwarman/JSequel#readme"
+}
