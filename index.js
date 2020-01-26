@@ -21,9 +21,8 @@ module.exports = class JsonQL {
   // ▀▀▀ ▀░▀▀ ░▀▀▀ ▀▀▀░   ▀░░░▀ ▀▀▀ ░░▀░░ ▀░░▀ ▀▀▀▀ ▀▀▀░ ▀▀▀
 
   selectJSQ(queryObj) {
-
     this.validateQueryObject(queryObj);
-    let query = this.parseQueryObj(queryObj);
+    let query = this.parseSelect(queryObj);
 
     if(this.fatalError) {
       return {
@@ -39,28 +38,99 @@ module.exports = class JsonQL {
       query
     }
   }
-  createJSQ(queryObj) {
-    this.parseQueryObj(queryObj);
+  createJSQ(queryObj, data) {
+    this.validateQueryObject(queryObj);
+    data = this.removeDisallowedKeys(queryObj, data);
+    let query = this.parseCreate(queryObj, data);
+
+    if(this.fatalError) {
+      return {
+        status: 'error',
+        errors: this.errors,
+        query: ''
+      }
+    }
+
+    return {
+      status: 'success',
+      errors: this.errors,
+      query
+    }
   }
-  updateJSQ(queryObj) {
-    this.parseQueryObj(queryObj);
+  updateJSQ(queryObj, data) {
+    this.validateQueryObject(queryObj);
+    data = this.removeDisallowedKeys(queryObj, data);
+    let query = this.parseUpdate(queryObj, data);
+
+    if(this.fatalError) {
+      return {
+        status: 'error',
+        errors: this.errors,
+        query: ''
+      }
+    }
+
+    return {
+      status: 'success',
+      errors: this.errors,
+      query
+    }
   }
   deleteJSQ(queryObj) {
-    this.parseQueryObj(queryObj);
-  }
-  // █▀▀█ █▀▀█ █▀▀█ █▀▀ █▀▀ █▀▀█ █▀▀
-  // █░░█ █▄▄█ █▄▄▀ ▀▀█ █▀▀ █▄▄▀ ▀▀█
-  // █▀▀▀ ▀░░▀ ▀░▀▀ ▀▀▀ ▀▀▀ ▀░▀▀ ▀▀▀
+    this.validateQueryObject(queryObj);
+    let query = this.parseDelete(queryObj);
 
-  parseQueryObj(queryObj) {
-    const {db, table} = this.parseDbAndTableNames(queryObj.name);
+    if(this.fatalError) {
+      return {
+        status: 'error',
+        errors: this.errors,
+        query: ''
+      }
+    }
+
+    return {
+      status: 'success',
+      errors: this.errors,
+      query
+    }
+  }
+
+  // █��▀▄ █▀▀█ ▀▀█▀▀ █▀▀█
+  // █��░█ █▄▄█ ░░█░░ █▄▄█
+  // ▀��▀░ ▀░░▀ ░░▀░░ ▀░░▀
+
+  parseData(db, table, data) {
+    let values = [];
+    let columns = [];
+    Object.keys(data).forEach(key => {
+
+      if(typeof data[key] === 'number') {
+        columns.push(key);
+        values.push(data[key]);
+      } else if(typeof data[key] === 'string') {
+        columns.push(key);
+        values.push(`'${data[key]}'`);
+      } else {
+        return;
+      }
+
+    });
+    return {columns, values}
+  }
+
+  // █▀▀ █▀▀ █░░ █▀▀ █▀▀ ▀▀█▀▀
+  // ▀▀█ █▀▀ █░░ █▀▀ █░░ ░░█░░
+  // ▀▀▀ ▀▀▀ ▀▀▀ ▀▀▀ ▀▀▀ ░░▀░░
+
+  parseSelect(queryObj) {
+    const {db, table} = this.splitDbAndTableNames(queryObj.name);
 
     let select = `SELECT ${
       queryObj.columns.length > 0 ? 
         queryObj.columns.map(col => {
 
           // If this name is a database selection we'll want to nest the new select inside the old one.
-          if(/^\w+\.\w+$/g.test(col.name)) return this.parseNestedQueryObj(col);
+          if(/^\w+\.\w+$/g.test(col.name)) return this.parseNestedSelect(col);
 
           let name = this.setNameString(db, table, col.name);
           if(col.as) {
@@ -72,7 +142,7 @@ module.exports = class JsonQL {
       ''
     }`;
 
-    let from = ` FROM ${queryObj.name}`
+    let from = ` FROM ${queryObj.name}`;
 
     // The outer parent object finds using a HAVING but the nested one's use WHERE.
     let where = (queryObj.where || []).length > 0 ? ` HAVING ${queryObj.where.map(wh => {
@@ -89,8 +159,8 @@ module.exports = class JsonQL {
     return `(${select}${from}${where}${limit})${as}`;
   }
 
-  parseNestedQueryObj(queryObj) {
-    const {db, table} = this.parseDbAndTableNames(queryObj.name);
+  parseNestedSelect(queryObj) {
+    const {db, table} = this.splitDbAndTableNames(queryObj.name);
 
     if(queryObj.columns.length === 0) {
       this.errors.push(`No columns included at ${db}.${table}`);
@@ -98,7 +168,7 @@ module.exports = class JsonQL {
     }
     return queryObj.columns.map(col => {
 
-      if(/^\w+\.\w+$/g.test(col.name)) return this.parseNestedQueryObj(col);
+      if(/^\w+\.\w+$/g.test(col.name)) return this.parseNestedSelect(col);
 
       let name = this.setNameString(db, table, col.name);
       let as = ` AS ${col.name}`;
@@ -123,6 +193,68 @@ module.exports = class JsonQL {
       return `(SELECT ${name} FROM ${queryObj.name}${where}${limit})${as}`;
 
     }).join();
+  }
+
+  // █▀▀ █▀▀█ █▀▀ █▀▀█ ▀▀█▀▀ █▀▀
+  // █░░ █▄▄▀ █▀▀ █▄▄█ ░░█░░ █▀▀
+  // ▀▀▀ ▀░▀▀ ▀▀▀ ▀░░▀ ░░▀░░ ▀▀▀
+
+  parseCreate(queryObj, data) {
+    const {db, table} = this.splitDbAndTableNames(queryObj.name);
+
+    let insert = `INSERT INTO ${db}.${table}`;
+
+    let {columns, values} = this.parseData(db, table, data);
+    let set = ` (${columns.map(c => c).join()}) VALUES (${values.map(v => v).join()})`;
+    return `${insert}${set}`;
+  }
+
+  // █░░█ █▀▀█ █▀▀▄ █▀▀█ ▀▀█▀▀ █▀▀
+  // █░░█ █░░█ █░░█ █▄▄█ ░░█░░ █▀▀
+  // ░▀▀▀ █▀▀▀ ▀▀▀░ ▀░░▀ ░░▀░░ ▀▀▀
+
+  parseUpdate(queryObj, data) {
+    const {db, table} = this.splitDbAndTableNames(queryObj.name);
+
+    let update = `UPDATE ${db}.${table}`;
+
+    let {columns, values} = this.parseData(db, table, data);
+    let set = ` SET ${columns.map(( key, i ) => `${key} = ${values[i]}`).join()}`;
+
+    if((queryObj.where || []).length === 0 || !queryObj.where) {
+      this.fatalError = true;
+      this.errors.push('No where condition provided. You cannot update all records in the table at once.');
+    }
+
+    let where = (queryObj.where || []).length > 0 ? ` WHERE ${queryObj.where.map(wh => {
+      if(wh.length && typeof wh === 'object') return wh.map(w => w).join(' OR ');
+      return wh;
+    }).join(' AND ')}` : '';
+
+    return `${update}${set}${where}`;
+  }
+
+  // █▀▀▄ █▀▀ █░░ █▀▀ ▀▀█▀▀ █▀▀
+  // █░░█ █▀▀ █░░ █▀▀ ░░█░░ █▀▀
+  // ▀▀▀░ ▀▀▀ ▀▀▀ ▀▀▀ ░░▀░░ ▀▀▀
+
+  parseDelete(queryObj) {
+    if(!queryObj.where) {
+      this.fatalError = true;
+      this.errors.push('No where string present. JSequel cannot delete all records in a single query.');
+      return '';
+    }
+
+    const {db, table} = this.splitDbAndTableNames(queryObj.name);
+    let del = `DELETE FROM ${db}.${table}`;
+
+
+    let where = (queryObj.where || []).length > 0 ? ` WHERE ${queryObj.where.map(wh => {
+      if(wh.length && typeof wh === 'object') return wh.map(w => w).join(' OR ');
+      return wh;
+    }).join(' AND ')}` : '';
+
+    return `${del}${where}`;
   }
 
   // █▀▀ ▀▀█▀▀ █▀▀█ ░▀░ █▀▀▄ █▀▀▀ █▀▀
@@ -253,7 +385,7 @@ module.exports = class JsonQL {
   // ░▀▀▀ ░░▀░░ ▀▀▀ ▀▀▀ ▀▀▀ ░░▀░░ ▀▀▀ ▀▀▀ ▀▀▀
 
 
-  parseDbAndTableNames(name) {
+  splitDbAndTableNames(name) {
     const dbTable = /^\w+\.\w+$/
     if(!dbTable.test(name)) {
       this.fatalError = true;
@@ -269,8 +401,32 @@ module.exports = class JsonQL {
   // ░█▄█░ █▄▄█ █░░ ▀█▀ █░░█ █▄▄█ ░░█░░ ▀█▀ █░░█ █░░█
   // ░░▀░░ ▀░░▀ ▀▀▀ ▀▀▀ ▀▀▀░ ▀░░▀ ░░▀░░ ▀▀▀ ▀▀▀▀ ▀░░▀
 
+  removeDisallowedKeys(queryObj, data) {
+    const {db,table} = this.splitDbAndTableNames(queryObj.name);
+    if(!(this.schema[db] || {})[table]) {
+      this.fatalError = true;
+      this.errors.push(`${db}.${table} is not in the schema`);
+      return;
+    }
+
+    let newData = {};
+
+    Object.keys(data).forEach(key => {
+      if(!this.schema[db][table][key]) {
+        this.errors.push(`${db}.${table}.${key} is not in the schema`);
+        this.fatalError = true;
+        return;
+      } else {
+        newData[key] = data[key];
+      }
+    });
+
+    return newData;
+
+  }
+
   validateQueryObject(queryObj) {
-    const {db,table} = this.parseDbAndTableNames(queryObj.name);
+    const {db,table} = this.splitDbAndTableNames(queryObj.name);
     this.dbTableNames.push({db, table});
 
     if(!(this.schema[db] || {})[table]) {
@@ -288,7 +444,7 @@ module.exports = class JsonQL {
     }
 
     // Remove all invalid columns from the queryObject.
-    queryObj.columns = queryObj.columns.filter(col => {
+    queryObj.columns = (queryObj.columns || []).filter(col => {
       const twoSelections = /^\w+\.\w+$/;
       if(twoSelections.test(col.name) && this.dbTableValid(col.name)) {
         // Now check the nested object.

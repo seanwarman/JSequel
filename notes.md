@@ -214,7 +214,20 @@ a bit smarter.
 
 I'll have to leave custom functions as a future feature for now.
 
+
+Add the update, create and delete logic.
+
+Do validation on update, create and delete.
+
+
+
+
+
+==== MARK
+
 For a nested record all you have to do is add an `as` param to the parent object.
+
+====
 
 ```js
 const query = {
