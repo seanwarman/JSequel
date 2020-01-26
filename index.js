@@ -20,7 +20,7 @@ module.exports = class JsonQL {
   // █░░ █▄▄▀ █░░█ █░░█   █░▀░█ █▀▀ ░░█░░ █▀▀█ █░░█ █░░█ ▀▀█
   // ▀▀▀ ▀░▀▀ ░▀▀▀ ▀▀▀░   ▀░░░▀ ▀▀▀ ░░▀░░ ▀░░▀ ▀▀▀▀ ▀▀▀░ ▀▀▀
 
-  selectQL(queryObj) {
+  select(queryObj) {
 
     this.validateQueryObject(queryObj);
     let query = this.parseQueryObj(queryObj);
