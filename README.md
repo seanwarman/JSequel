@@ -203,9 +203,9 @@ All json query strings must start with a `$`, after that they're the same as jav
 Say you had a json column with an array of objects.
 
 ```js
-____________________________
-mealTypes                  |
-----------------------------
+//____________________________
+//mealTypes                  |
+//----------------------------
 [
   {
     type: 'burger',
@@ -256,4 +256,4 @@ You can search the json column by any string value within using a string that st
 This finds an object in an array of objects by searching for the string 'Bigg Mac' then 
 returns whatever is assigned to the key called `type`.
 
-You can use **jQStrings** wherever you find a `name` parameter so they even work in joins.
+You can use **jQStrings** wherever you find a `name` parameter.

@@ -253,3 +253,5 @@ const query = {
 // }
 ```
 
+Make json query strings compatible with `where` strings.
+
