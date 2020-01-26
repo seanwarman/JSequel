@@ -1,5 +1,9 @@
 # JSequel (BETA)
-A small framework for building MYSQL queries with json objects.
+A small framework for controlling your API endpoints from the frontend. Much
+like GraphQL but lighter and less obtrusive to your already complicated
+stack. 
+
+All **JSequel** does is make mysql query strings so it's also fast.
 
 It allows you to build your database query in the frontend like...
 
@@ -103,7 +107,7 @@ LEFT JOIN macDonalds.meals ON meals.mealKey = customers.favouriteMealKey
 
 
 ### MongoDB-like associations
-Add an `as` to a nested column and JSequel will return those records inside an array...
+Add an `as` to a nested column and JSequel will return those records inside an array.
 
 So rather than starting with the `customer` to find their favourite meal you can start
 with the meal and list every customer who has that meal as their favourite.
@@ -126,7 +130,7 @@ with the meal and list every customer who has that meal as their favourite.
 }
 ```
 
-This is very un-mysqlish but really usefull for modern web apps.
+This is very un-mysqlish but really useful for modern web apps.
 ```js
 // Result...
 {
@@ -138,7 +142,6 @@ This is very un-mysqlish but really usefull for modern web apps.
   ]
 }
 ```
-
 
 If you've had any experience with [serverless](https://serverless.com/) lambda functions
 you'll know that if you want more than about 20 endpoints in a project, things start to
@@ -204,9 +207,6 @@ async function example() {
   await con.end()
 }
 ```
-
-This project is basically a simplified v2 of [JsonQL](https://github.com/seanwarman/jsonQL). If you want
-an idea of the roadmap for **JSequel** you can check out that project.
 
 ### Create
 If you want to make a **CREATE** just add some `data`:
@@ -356,3 +356,8 @@ This finds an object in an array of objects by searching for the string 'Big Mac
 returns whatever is assigned to the key called `type`.
 
 You can use **jQStrings** wherever you find a `name` parameter.
+
+
+This project is basically a simplified v2 of [JsonQL](https://github.com/seanwarman/jsonQL). If you want
+an idea of the roadmap for **JSequel** you can check out that project.
+
