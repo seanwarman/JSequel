@@ -22,8 +22,8 @@ module.exports = class JsonQL {
   // +~====**ENTRYPOINTS**====~+
   // +~====***************====~+
 
-  // selectJSQ=>
-  selectJSQ(queryObj) {
+  // selectSQ=>
+  selectSQ(queryObj) {
     this.validateQueryObject(queryObj);
     let query = this.parseSelect(queryObj);
 
@@ -41,8 +41,8 @@ module.exports = class JsonQL {
       query
     }
   }
-  // createJSQ=>
-  createJSQ(queryObj, data) {
+  // createSQ=>
+  createSQ(queryObj, data) {
     this.validateQueryObject(queryObj);
     data = this.removeDisallowedKeys(queryObj, data);
     let query = this.parseCreate(queryObj, data);
@@ -61,8 +61,8 @@ module.exports = class JsonQL {
       query
     }
   }
-  // updateJSQ=>
-  updateJSQ(queryObj, data) {
+  // updateSQ=>
+  updateSQ(queryObj, data) {
     this.validateQueryObject(queryObj);
     data = this.removeDisallowedKeys(queryObj, data);
     let query = this.parseUpdate(queryObj, data);
@@ -81,8 +81,8 @@ module.exports = class JsonQL {
       query
     }
   }
-  // deleteJSQ=>
-  deleteJSQ(queryObj) {
+  // deleteSQ=>
+  deleteSQ(queryObj) {
     this.validateQueryObject(queryObj);
     let query = this.parseDelete(queryObj);
 

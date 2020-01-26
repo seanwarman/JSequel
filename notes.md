@@ -219,15 +219,8 @@ Add the update, create and delete logic.
 
 Do validation on update, create and delete.
 
-
-
-
-
-==== MARK
-
 For a nested record all you have to do is add an `as` param to the parent object.
 
-====
 
 ```js
 const query = {
@@ -266,5 +259,14 @@ const query = {
 // }
 ```
 
+==== MARK 
+
+For some reason the `limit` doesn't work inside nested json queries.
+This LIMIT doesn't do anything. See if you can get it working.
+`(select JSON_ARRAYAGG(JSON_OBJECT("fileName", uploads.fileName, "tmpUploadKey", uploads.uploadKey)) from uploads where bookings.bookingsKey = uploads.bookingsKey LIMIT 0,5) as uploads`
+
+Make json query strings compatible with data keys
 Make json query strings compatible with `where` strings.
+Make the custom functions feature.
+
 

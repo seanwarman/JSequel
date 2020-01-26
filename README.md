@@ -81,6 +81,7 @@ JOINs can be added as part of the `columns` array...
         {name: 'price'}
       ],
       where: ['meals.mealKey = customers.favouriteMealKey']
+    }
   ]
 }
 ```
@@ -99,6 +100,45 @@ macDonalds.customers
 
 LEFT JOIN macDonalds.meals ON meals.mealKey = customers.favouriteMealKey
 ```
+
+
+### MongoDB-like associations
+Add an `as` to a nested column and JSequel will return those records inside an array...
+
+So rather than starting with the `customer` to find their favourite meal you can start
+with the meal and list every customer who has that meal as their favourite.
+```js
+{
+  name: 'macDonalds.meals',
+  columns: [
+    {name: 'title'},
+    {
+      name: 'macDonalds.customers',
+      columns: [
+        {name: 'firstName'},
+        {name: 'lastName'}
+      ],
+      where: ['meals.mealKey = customers.favouriteMealKey'],
+      as: 'customersWhoLike' // <<
+    }
+  ],
+  where: ['title = "Big Mac"']
+}
+```
+
+This is very un-mysqlish but really usefull for modern web apps.
+```js
+// Result...
+{
+  title: 'Big Mac',
+  customersWhoLike: [
+    {firstName: 'bill', lastName: 'ray'},
+    {firstName: 'gemma', lastName: 'stonebridge'},
+    // ...etc
+  ]
+}
+```
+
 
 If you've had any experience with [serverless](https://serverless.com/) lambda functions
 you'll know that if you want more than about 20 endpoints in a project, things start to
@@ -121,7 +161,7 @@ const connection = require('../libs/connection');
 const schema = require('../schema');
 
 // Import JSequel...
-const JSequel = require('jsequel');
+const JSeq = require('jsequel');
 
 
 async function example() {
@@ -130,10 +170,10 @@ async function example() {
   const con = await mysql.createConnection(connection);
 
   // Make a new JSequel instance using your chosen schema.
-  const jSequel = new JSequel(schema);
+  const jSeq= new JSeq(schema);
 
-  // We're doing a get here so use selectQL and pass it your jsonQL object...
-  let queryObj = jSequel.select({
+  // We're doing a get here so use selectQL and pass it your JSequel object...
+  let queryObj = jSeq.selectSQ({
     name: 'macDonalds.employees',
     columns: [
       {name: 'firstName'},
@@ -154,7 +194,7 @@ async function example() {
 
   let result;
 
-  // jsonQL will put your mysql string onto a param called query...
+  // JSequel will put your mysql string onto a param called query...
   try {
     result = await con.query(queryObj.query)
   } catch (err) {
@@ -167,6 +207,65 @@ async function example() {
 
 This project is basically a simplified v2 of [JsonQL](https://github.com/seanwarman/jsonQL). If you want
 an idea of the roadmap for **JSequel** you can check out that project.
+
+### Create
+If you want to make a **CREATE** just add some `data`:
+
+```js
+let data = {
+  _id: '123',
+  firstName: 'Bob',
+  lastName: 'Smith'
+}
+
+jSeq.createSQ({
+  name: 'macDonalds.employees'
+}, data);
+```
+
+### Update
+To make an **UPDATE** just add a `where`.
+
+```js
+let data = {
+  firstName: 'Bobby'
+}
+
+jSeq.createSQ({
+  name: 'macDonalds.employees',
+  where: ['_id = "123"']
+}, data);
+```
+
+## Schema
+You'll need a schema for your database, this will prevent anyone from injecting dangerous
+SQL into your db without **jsonQL** stamping it out.
+
+The structure of your schema object should look like:
+
+```js
+module.exports = {
+  databaseName: {
+    tableName1: {
+      column1: {
+        type: 'string'
+      },
+      column2: {
+        type: 'string',
+      }
+    },
+    tableName2: {
+      column1: {
+        type: 'number'
+      }
+    }
+  }
+  databaseName2: {
+    // etc...
+  }
+}
+```
+Any columns not included in the schema will be automatically omitted from your queries.
 
 ## Functions
 You can use any of MYSQLs in-built functions by adding the function name to any `name` param.
@@ -209,7 +308,7 @@ Say you had a json column with an array of objects.
 [
   {
     type: 'burger',
-    name: 'Bigg Mac'
+    name: 'Big Mac'
   },
   {
     type: 'chicken',
@@ -234,7 +333,7 @@ Say you had a json column with an array of objects.
 // orders: [{
 //   firstMealObject: {
 //     type: 'burger',
-//     name: 'Bigg Mac'
+//     name: 'Big Mac'
 //   }
 // }]
 ```
@@ -245,7 +344,7 @@ You can search the json column by any string value within using a string that st
 {
   name: 'macDonalds.orders'
   columns: [
-    {name: '$mealTypes[?Bigg Mac].type', as: 'biggMacType'}
+    {name: '$mealTypes[?Big Mac].type', as: 'biggMacType'}
   ]
 }
 // Would return...
@@ -253,7 +352,7 @@ You can search the json column by any string value within using a string that st
 //   biggMacType: 'burger'
 // }]
 ```
-This finds an object in an array of objects by searching for the string 'Bigg Mac' then 
+This finds an object in an array of objects by searching for the string 'Big Mac' then 
 returns whatever is assigned to the key called `type`.
 
 You can use **jQStrings** wherever you find a `name` parameter.
