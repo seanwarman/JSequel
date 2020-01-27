@@ -326,68 +326,69 @@ module.exports = class JsonQL {
 
   // funcString=>
   funcString(db, table, name) {
+    console.log('name: ', name);
     const func = name.slice(0, name.indexOf('=>'))
 
-    let columns = name.slice(
+    let args = name.slice(
       func.length + 2
     ).match(
-      /\w+\=\>|[\(\)]|[`"'](.*?)[`"']|\$*(\w+\.)+\w+|\$*\w+|\\|\/|\+|>=|<=|=>|>|<|-|\*|=/g
+      /\w+\=\>|\(|\)|[`"'](.*?)[`"']|\$*(\w+\.)+\w+|\$*\w+|\\|\/|\+|>=|<=|=>|>|<|-|\*|=/g
     );
 
-    return this.convertFunc(func, columns, 0);
+    return this.convertFunc(func, args, 0);
   }
 
   // convertFunc=>
   convertFunc(funcName, args, count) {
+    let counts = [];
+    let indexes = [];
+    let types = [];
 
-    let funcArgs = [];
-    let funcArgStrings = [];
-    let done = false;
-
-    args.forEach((a,i) => {
-      if(done) return;
-      if(/\(/.test(a)) {
-        count++;
-        return;
+    args.forEach((arg,index) => {
+      if(/\(/.test(arg)) {
+        if(types[types.length -1] !== 'close') count++;
+        types.push('open');
+        counts.push(count);
+        indexes.push(index);
       }
-
-
-      if(/^\w+\=\>/.test(a)) {
-        funcArgStrings.push(this.convertFunc(a.slice(0,-2), args.slice(i+1), count));
-        funcArgs.push(this.convertFunc(a.slice(0,-2), args.slice(i+1), count));
-        done = true;
-        return;
-      }
-      if(!/\)|^\w+\=\>/.test(a)) {
-        funcArgStrings.push(a);
-        funcArgs.push(a);
-        return;
-      }
-
-
-
-      if(/\)/.test(a) && count === 1) {
-        funcArgStrings.length > 0 ?
-        funcArgStrings[funcArgStrings.length-1] += ')'
-        :
-        funcArgStrings[0] = ')';
-        done = true;
-        return;
-      }
-      if(/\)/.test(a)) {
-        funcArgStrings.length > 0 ?
-        funcArgStrings[funcArgStrings.length-1] += ')'
-        :
-        funcArgStrings[0] = ')';
-        count--;
-
+      if(/\)/.test(arg)) {
+        if(types[types.length -1] === 'close') count--;
+        types.push('close');
+        counts.push(count);
+        indexes.push(index);
       }
     });
 
-    if((this.customFns || {})[funcName]) {
-      return this.customFns[funcName](...funcArgs);
-    }
-    return `${funcName.toUpperCase()}(${funcArgStrings.join()}`;
+
+    let nameStrings = types.reduce((arr,type,i) => {
+
+      if(type === 'close') {
+
+        let endIndex = indexes[i];
+
+        let currentCount = counts[i];
+        let startCountIndex = counts.lastIndexOf(currentCount, i-1);
+
+        let startIndex = indexes[startCountIndex]+1;
+
+        let fnName = args.slice(startIndex-2, startIndex-1).join().slice(0,-2);
+        let fnArgs = args.slice(startIndex, endIndex);
+        // if(this.customFns[fnName]) return str += this.customFns[fnName](...fnArgs);
+
+
+
+        return [...arr, [args.slice(startIndex, endIndex).join('')]];
+
+      }
+      return arr;
+
+    },[]);
+    console.log('nameStrings: ', nameStrings);
+    return nameStrings[nameStrings.length-1];
+
+  }
+  fnString(fnName, args) {
+    if(this.customFns[fnName]) return this.customFns[fnName](...args);
 
   }
   // +~====*************************====~+

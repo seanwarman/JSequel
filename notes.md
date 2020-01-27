@@ -261,6 +261,10 @@ const query = {
 
 ==== MARK 
 Make the custom functions feature.
+
+
+
+
 Auto key and hidden to the schema.
 Make json query strings compatible with data keys
 Have update and create return the record they created/updated.
