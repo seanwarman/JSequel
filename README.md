@@ -231,7 +231,7 @@ let data = {
   firstName: 'Bobby'
 }
 
-jSeq.createSQ({
+jSeq.updateSQ({
   name: 'macDonalds.employees',
   where: ['_id = "123"']
 }, data);
@@ -239,7 +239,7 @@ jSeq.createSQ({
 
 ## Schema
 You'll need a schema for your database, this will prevent anyone from injecting dangerous
-SQL into your db without **jsonQL** stamping it out.
+SQL into your db without **JSequel** stamping it out.
 
 The structure of your schema object should look like:
 
