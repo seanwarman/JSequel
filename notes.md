@@ -260,13 +260,13 @@ const query = {
 ```
 
 ==== MARK 
+Make the custom functions feature.
+Auto key and hidden to the schema.
+Make json query strings compatible with data keys
+Have update and create return the record they created/updated.
+
+Make json query strings compatible with `where` strings.
 
 For some reason the `limit` doesn't work inside nested json queries.
 This LIMIT doesn't do anything. See if you can get it working.
 `(select JSON_ARRAYAGG(JSON_OBJECT("fileName", uploads.fileName, "tmpUploadKey", uploads.uploadKey)) from uploads where bookings.bookingsKey = uploads.bookingsKey LIMIT 0,5) as uploads`
-
-Make json query strings compatible with data keys
-Make json query strings compatible with `where` strings.
-Make the custom functions feature.
-
-
