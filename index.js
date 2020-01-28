@@ -326,7 +326,6 @@ module.exports = class JsonQL {
 
   // funcString=>
   funcString(db, table, name) {
-    console.log('name: ', name);
     const func = name.slice(0, name.indexOf('=>'))
 
     let args = name.slice(
@@ -335,11 +334,12 @@ module.exports = class JsonQL {
       /\w+\=\>|\(|\)|[`"'](.*?)[`"']|\$*(\w+\.)+\w+|\$*\w+|\\|\/|\+|>=|<=|=>|>|<|-|\*|=/g
     );
 
-    return this.convertFunc(func, args, 0);
+    return `${func}(${this.convertFunc(func, args, 0)})`;
   }
 
   // convertFunc=>
-  convertFunc(funcName, args, count) {
+  convertFunc(func, args, count) {
+    console.log('args:', args);
     let counts = [];
     let indexes = [];
     let types = [];
@@ -360,7 +360,7 @@ module.exports = class JsonQL {
     });
 
 
-    let nameStrings = types.reduce((arr,type,i) => {
+    let fnAndArgPositions = types.reduce((arr,type,i) => {
 
       if(type === 'close') {
 
@@ -371,24 +371,48 @@ module.exports = class JsonQL {
 
         let startIndex = indexes[startCountIndex]+1;
 
-        let fnName = args.slice(startIndex-2, startIndex-1).join().slice(0,-2);
-        let fnArgs = args.slice(startIndex, endIndex);
         // if(this.customFns[fnName]) return str += this.customFns[fnName](...fnArgs);
 
 
 
-        return [...arr, [args.slice(startIndex, endIndex).join('')]];
+        return [...arr,  [startIndex, endIndex] ];
 
       }
       return arr;
 
     },[]);
-    console.log('nameStrings: ', nameStrings);
-    return nameStrings[nameStrings.length-1];
+    console.log('fnAndArgPositions: ', fnAndArgPositions);
+
+
+
+    return fnAndArgPositions.map(arr => {
+
+
+
+
+
+    });
+//       console.log('arr: ', arr);
+//       console.log('fnArgs: ', fnArgs);
+//       if(/^\w+\=\>/.test(args[arr[0]])) {
+//         let fnName = args.slice(arr[0]-2, arr[0]-1).join().slice(0,-2);
+
+//         let fnArgs = args.slice(arr[0], arr[1]);
+//         return this.fnString(fnName, fnArgs);
+//       }
+//       return args.filter(a => !/\(|\)/.test(a)).map(a=> a).join();
+
+//       console.log('fnName: ', fnName);
+    
+//     }).join();
+//     // console.log('argPositions: ', argPositions);
+    // return argPositions[argPositions.length-1];
 
   }
   fnString(fnName, args) {
     if(this.customFns[fnName]) return this.customFns[fnName](...args);
+
+    return `${fnName.toUpperCase()}(${args.filter(a => !/\(|\)/.test(a)).map(a=> a).join()})`;
 
   }
   // +~====*************************====~+

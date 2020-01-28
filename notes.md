@@ -262,6 +262,73 @@ const query = {
 ==== MARK 
 Make the custom functions feature.
 
+If we have the string
+(bookingDivName concat=>(" a thing" myFun=>() myFunc=>(concat=>())) " yet another thing")
+
+Actually whats wrong with just converting the whole string capitalising any func names not in custom funcs and
+combining their brackets then finally calling the customfuncs on each func that's left.
+
+We get the array..
+args = (, bookingDivName, concat=>, (, " a thing", myFunc=>, (, ), myFunc=>, (, concat=>, (, ), ), ), " yet another thing", )
+       0  1               2         3  4           5         6  7  8         9  10        11 12 13 14 15                    16
+
+And convert any function names.
+args = (, bookingDivName, CONCAT,  (, " a thing",  myFunc,   (, ),  myFunc,   (, CONCAT,   (, ), ), ), " yet another thing", )
+       0  1               2         3 4            5         6  7   8         9  10        11 12 13 14 15                    16
+
+Then we get the argument positions
+positions = [ 7, 7 ], [ 12, 12 ], [ 10, 13 ], [ 4, 14 ], [ 1, 16 ] 
+
+The pattern is any positions values that are the same as each other means there's no arguments and those functions 
+(unless they're custom) can be flattened.
+
+If they are custom they can be called, returning their string in place of the name.
+
+If the function doesnt have an argument flatten it
+args = (, bookingDivName, CONCAT,  (, " a thing",  "myFunc args where: []",  myFunc,   (, CONCAT(), ), ), " yet another thing", )
+
+Get the new argument positions
+args = (, bookingDivName, CONCAT,  (, " a thing",  "myFunc args where: []",  myFunc,   (, CONCAT(), ), ), " yet another thing", )
+       0  1               2        3  4            5                         6         7  8         9  10 11                    12
+
+There's a pattern here. The position items that have the smallest difference between their numbers are the inner most
+arguments. 
+
+A position difference of 3 is the least you can have to have a function with a function with arguments as an argument. None of these arguments will have nested
+function arguments but they might be custom so you'll still need to call them before flattening the argument.
+
+positions = [8, 9] [4, 10] [1, 12] 
+
+Again if the position difference is less than 3 we can call it or flatten it.
+
+9 - 8 = 1 call or flatten (in this case call it).
+
+Get the new argument positions again
+args = (, bookingDivName, CONCAT,  (, " a thing",  "myFunc args where: []",  "myFunc args where: [CONCAT()]", ), " yet another thing", )
+       0  1               2        3  4            5                         6                                7  8                     9
+
+positions = [4, 7] [1, 9]
+
+Now there are no positions left with a difference less than 3. We just grab the one with the least difference (probably always the earliest one).
+
+If it's a custom function call it, passing in the arguments, if not then we can just flatten it.
+
+args = (, bookingDivName, CONCAT(" a thing",  "myFunc args where: []",  "myFunc args where: [CONCAT()]"), " yet another thing", )
+       0  1               2                                                                               3                     4
+
+positions = [1, 4]
+
+Now there's only one position left we can flatten it and return the args.
+
+args = ['bookingDivName', 'CONCAT(" a thing",  "myFunc args where: []",  "myFunc args where: [CONCAT()]")', '" yet another thing"']
+
+
+
+
+
+
+
+
 
 
 
@@ -274,3 +341,17 @@ Make json query strings compatible with `where` strings.
 For some reason the `limit` doesn't work inside nested json queries.
 This LIMIT doesn't do anything. See if you can get it working.
 `(select JSON_ARRAYAGG(JSON_OBJECT("fileName", uploads.fileName, "tmpUploadKey", uploads.uploadKey)) from uploads where bookings.bookingsKey = uploads.bookingsKey LIMIT 0,5) as uploads`
+
+
+
+
+
+
+
+
+
+
+
+
+
+
