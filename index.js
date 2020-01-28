@@ -337,21 +337,21 @@ module.exports = class JsonQL {
     return `${func}(${this.convertFunc(func, args, 0)})`;
   }
 
-  // convertFunc=>
-  convertFunc(func, args, count) {
-    console.log('args:', args);
+  // getArgPositions=>
+  getArgPositions(args) {
+    let count = 0;
     let counts = [];
     let indexes = [];
     let types = [];
 
     args.forEach((arg,index) => {
-      if(/\(/.test(arg)) {
+      if(/^\($/.test(arg)) {
         if(types[types.length -1] !== 'close') count++;
         types.push('open');
         counts.push(count);
         indexes.push(index);
       }
-      if(/\)/.test(arg)) {
+      if(/^\)$/.test(arg)) {
         if(types[types.length -1] === 'close') count--;
         types.push('close');
         counts.push(count);
@@ -359,8 +359,7 @@ module.exports = class JsonQL {
       }
     });
 
-
-    let fnAndArgPositions = types.reduce((arr,type,i) => {
+    return types.reduce((arr,type,i) => {
 
       if(type === 'close') {
 
@@ -371,43 +370,69 @@ module.exports = class JsonQL {
 
         let startIndex = indexes[startCountIndex]+1;
 
-        // if(this.customFns[fnName]) return str += this.customFns[fnName](...fnArgs);
-
-
-
         return [...arr,  [startIndex, endIndex] ];
 
       }
       return arr;
 
     },[]);
-    console.log('fnAndArgPositions: ', fnAndArgPositions);
 
+  }
 
+  // flattenArgs=>
+  flattenArgs(newArgs, argPositions) {
+    let start = argPositions[0][0];
+    let end = argPositions[0][1];
 
-    return fnAndArgPositions.map(arr => {
+    if(start === end) {
+      return newArgs.reduce((arr,arg,i) => {
 
+        if(i === start - 2) {
+          return [...arr, arg + '()'];
+        }
 
+        if(i === start - 1 || i === start) {
+          return arr;
+        }
 
+        return [...arr, arg];
 
+      },[]);
+    }
+  }
 
+  // convertFunc=>
+  convertFunc(func, args) {
+
+    let newArgs = args;
+
+    // Convert function names
+    newArgs = newArgs.map(a => {
+      if(a.indexOf('=>') !== -1) {
+        if(!this.customFns[a.slice(0,-2)]) return a.slice(0,-2).toUpperCase();
+        return a.slice(0,-2);
+      }
+      return a;
     });
-//       console.log('arr: ', arr);
-//       console.log('fnArgs: ', fnArgs);
-//       if(/^\w+\=\>/.test(args[arr[0]])) {
-//         let fnName = args.slice(arr[0]-2, arr[0]-1).join().slice(0,-2);
+    console.log(newArgs);
 
-//         let fnArgs = args.slice(arr[0], arr[1]);
-//         return this.fnString(fnName, fnArgs);
-//       }
-//       return args.filter(a => !/\(|\)/.test(a)).map(a=> a).join();
+    let argPositions = this.getArgPositions(newArgs);
+    console.log('argPositions: ', argPositions);
 
-//       console.log('fnName: ', fnName);
-    
-//     }).join();
-//     // console.log('argPositions: ', argPositions);
-    // return argPositions[argPositions.length-1];
+    newArgs = this.flattenArgs(newArgs, argPositions);
+    console.log('newArgs: ', newArgs);
 
+    argPositions = this.getArgPositions(newArgs);
+    console.log('argPositions: ', argPositions);
+
+    newArgs = this.flattenArgs(newArgs, argPositions);
+    console.log('newArgs: ', newArgs);
+
+    argPositions = this.getArgPositions(newArgs);
+    console.log('argPositions: ', argPositions);
+
+    newArgs = this.flattenArgs(newArgs, argPositions);
+    console.log('newArgs: ', newArgs);
   }
   fnString(fnName, args) {
     if(this.customFns[fnName]) return this.customFns[fnName](...args);
