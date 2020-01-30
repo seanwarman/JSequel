@@ -13,8 +13,8 @@ module.exports = class JsonQL {
     this.customFns = {};
   }
 
-  // custom=>
-  custom(customFns) {
+  // addCustomFns=>
+  addCustomFns(customFns) {
     this.customFns = customFns;
   }
 
@@ -334,7 +334,43 @@ module.exports = class JsonQL {
       /\w+\=\>|\(|\)|[`"'](.*?)[`"']|\$*(\w+\.)+\w+|\$*\w+|\\|\/|\+|>=|<=|=>|>|<|-|\*|=/g
     );
 
-    return `${func}(${this.convertFunc(func, args, 0)})`;
+    return this.convertFunc(func, args, 0);
+  }
+
+  // +~====*************************====~+
+  // +~====******'FUNCTIONS'********====~+
+  // +~====*************************====~+
+
+  // convertFunc=>
+  convertFunc(func, args) {
+
+    let newArgs = args;
+
+    // Convert all function names that aren't custom functions
+    newArgs = newArgs.map(a => {
+      if(a.indexOf('=>') !== -1) {
+        if(!this.customFns[a.slice(0,-2)]) return a.slice(0,-2).toUpperCase();
+        return a.slice(0,-2);
+      }
+      return a;
+    });
+
+    // Make an array of arrays of positions of all the arguments.
+    // This starts from the first arg to the closing bracket.
+    // We never capture the opening bracket.
+    let argPositions = this.getArgPositions(newArgs);
+
+    // In a loop keep flattening the arguments and re-calibrating
+    // the argument positions until there's one big argument left.
+    do {
+      newArgs = this.flattenArgs(newArgs, argPositions);
+      argPositions = this.getArgPositions(newArgs);
+    } while (argPositions.length > 1);
+
+    // If it's custom call it, if not return it with the name at the front
+    // I'm doing toUpperCase here just to denote it's definitely a mysql function.
+    if(this.customFns[func]) return this.customFns[func](newArgs.slice(1,-1));
+    return `${func.toUpperCase()}(${newArgs.slice(1, -1).join()})`;
   }
 
   // getArgPositions=>
@@ -383,11 +419,18 @@ module.exports = class JsonQL {
   flattenArgs(newArgs, argPositions) {
     let start = argPositions[0][0];
     let end = argPositions[0][1];
+    // start === end      < No arguments:  '()'               [ 7, 7 ]
+    // end - start === 1  < One argument:  '("hi")'           [ 7, 8 ]
+    // end - start === 2  < Two arguments: '("hi", CONCAT())' [ 7, 9 ]
+    // etc...
 
+    // If there's no arguments, for example [3, 3].
+    // We can just flatten this arg 
     if(start === end) {
       return newArgs.reduce((arr,arg,i) => {
 
         if(i === start - 2) {
+          if(this.customFns[arg]) return [...arr, this.customFns[arg]()];
           return [...arr, arg + '()'];
         }
 
@@ -399,47 +442,50 @@ module.exports = class JsonQL {
 
       },[]);
     }
+
+    // if there's one argument, for example [ 8, 9 ].
+    // if there's two arguments, for example [ 8, 10 ].
+    // These are arguments that are definitely not unflattened functions
+    // and can be flattened. 
+    if(end - start === 1 || end - start === 2) {
+      return newArgs.reduce((arr,arg,i) => {
+
+        if(i === start - 2) {
+          if(this.customFns[arg]) return [...arr, this.customFns[arg](newArgs.slice(start, end))];
+          return [...arr, arg + '(' + newArgs.slice(start, end).join() + ')'];
+        }
+
+        if(i === start - 1 || i === start || i === end) {
+          return arr;
+        }
+
+        return [...arr, arg];
+
+      },[]);
+    }
+
+    // If there's two or more arguments, for example [ 4, 8 ].
+    // Any of these arguments could be a function with many
+    // arguments. If they're not custom we just treat them
+    // like any other argument.
+    if(end - start > 2) {
+      return newArgs.reduce((arr,arg,i) => {
+
+        if(i === start - 2) {
+          if(this.customFns[arg]) return [...arr, this.customFns[arg](newArgs.slice(start, end))];
+          return [...arr, arg + '(' + newArgs.slice(start, end).join() + ')'];
+        }
+
+        if(i === start - 1 || (i >= start && i <= end)) {
+          return arr;
+        }
+
+        return [...arr, arg];
+
+      });
+    }
   }
 
-  // convertFunc=>
-  convertFunc(func, args) {
-
-    let newArgs = args;
-
-    // Convert function names
-    newArgs = newArgs.map(a => {
-      if(a.indexOf('=>') !== -1) {
-        if(!this.customFns[a.slice(0,-2)]) return a.slice(0,-2).toUpperCase();
-        return a.slice(0,-2);
-      }
-      return a;
-    });
-    console.log(newArgs);
-
-    let argPositions = this.getArgPositions(newArgs);
-    console.log('argPositions: ', argPositions);
-
-    newArgs = this.flattenArgs(newArgs, argPositions);
-    console.log('newArgs: ', newArgs);
-
-    argPositions = this.getArgPositions(newArgs);
-    console.log('argPositions: ', argPositions);
-
-    newArgs = this.flattenArgs(newArgs, argPositions);
-    console.log('newArgs: ', newArgs);
-
-    argPositions = this.getArgPositions(newArgs);
-    console.log('argPositions: ', argPositions);
-
-    newArgs = this.flattenArgs(newArgs, argPositions);
-    console.log('newArgs: ', newArgs);
-  }
-  fnString(fnName, args) {
-    if(this.customFns[fnName]) return this.customFns[fnName](...args);
-
-    return `${fnName.toUpperCase()}(${args.filter(a => !/\(|\)/.test(a)).map(a=> a).join()})`;
-
-  }
   // +~====*************************====~+
   // +~====**'JSONQUERY FUNCTIONS'**====~+
   // +~====*************************====~+

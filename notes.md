@@ -259,7 +259,6 @@ const query = {
 // }
 ```
 
-==== MARK 
 Make the custom functions feature.
 
 If we have the string
@@ -322,7 +321,13 @@ Now there's only one position left we can flatten it and return the args.
 
 args = ['bookingDivName', 'CONCAT(" a thing",  "myFunc args where: []",  "myFunc args where: [CONCAT()]")', '" yet another thing"']
 
-See index.js:405
+
+That's done! I think. There's a couple of things to remember about custom functions.
+
+1. They only accept strings (and maybe numbers...?).
+2. They must return a string.
+3. If a mysql function is passed as a function it will be in sring form
+and *with* it's parenthesees, eg 'CONCAT()'.
 
 
 
@@ -333,10 +338,15 @@ See index.js:405
 
 
 
+==== MARK 
 
 Auto key and hidden to the schema.
 Make json query strings compatible with data keys
 Have update and create return the record they created/updated.
+
+Input and output custom functions (myFunc=> myFunc->)
+
+Could custom functions not return a string and instead *do* something?
 
 Make json query strings compatible with `where` strings.
 
