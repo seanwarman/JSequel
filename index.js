@@ -209,6 +209,8 @@ module.exports = class JsonQL {
   parseNestedSelect(queryObj) {
     const {db, table} = this.splitDbAndTableNames(queryObj.name);
 
+    console.log('queryObj: ', queryObj);
+
     if(queryObj.columns.length === 0) {
       this.errors.push(`No columns included at ${db}.${table}`);
       return '';
@@ -218,7 +220,7 @@ module.exports = class JsonQL {
       if(/^\w+\.\w+$/g.test(col.name)) return this.parseNestedSelect(col);
 
       let name = this.setNameString(db, table, col.name);
-      let as = ` AS ${col.name}`;
+      let as = ` AS ${name}`;
       if(col.as) {
         as = ` AS ${col.as}`;
       }
@@ -328,6 +330,7 @@ module.exports = class JsonQL {
   // funcString=>
   funcString(db, table, name) {
     const func = name.slice(0, name.indexOf('=>'))
+    console.log('name: ', name);
 
     let args = name.slice(
       func.length + 2
@@ -345,18 +348,7 @@ module.exports = class JsonQL {
   // convertFunc=>
   convertFunc(func, args) {
 
-    console.log('args: ', args);
-
     let newArgs = args;
-
-    // Convert all function names that aren't custom functions
-    newArgs = newArgs.map(a => {
-      if(a.indexOf('=>') !== -1) {
-        if(!this.customFns[a.slice(0,-2)]) return a.slice(0,-2).toUpperCase();
-        return a.slice(0,-2);
-      }
-      return a;
-    });
 
     // Make an array of arrays of positions of all the arguments.
     // This starts from the first arg to the closing bracket.
@@ -368,13 +360,16 @@ module.exports = class JsonQL {
     do {
       argPositions = this.getArgPositions(newArgs);
       newArgs = this.flattenArgs(newArgs, argPositions);
-      console.log('newArgs: ', newArgs);
     } while (argPositions.length > 1);
+    console.log('newArgs: ', newArgs);
+    console.log('argPositions: ', argPositions);
 
     // If it's custom call it, if not return it with the name at the front
     // I'm doing toUpperCase here just to denote it's definitely a mysql function.
-    if(this.customFns[func]) return this.customFns[func](newArgs.slice(1,-1));
-    return `${func.toUpperCase()}(${newArgs.slice(1, -1).join()})`;
+    if(this.customFns[func]) return this.customFns[func](newArgs);
+    // return `${func.toUpperCase()}(${newArgs.slice(1, -1).join()})`;
+    let str = `${func.toUpperCase()}(${newArgs.join()})`;
+    return str;
   }
 
   // getArgPositions=>
@@ -423,20 +418,31 @@ module.exports = class JsonQL {
   flattenArgs(newArgs, argPositions) {
     let start = argPositions[0][0];
     let end = argPositions[0][1];
-    console.log('arg positions: ', argPositions);
     // start === end      < No arguments:  '()'               [ 7, 7 ]
     // end - start === 1  < One argument:  '("hi")'           [ 7, 8 ]
     // end - start === 2  < Two arguments: '("hi", CONCAT())' [ 7, 9 ]
     // etc...
+
+    // If the start of the arguments is 1 then we're at
+    // the outermost argument and just need to return the
+    // whole thing.
+    if(start === 1 && end !== 1) {
+      return newArgs.slice(start, end);
+
+    // if the start and end are both 1 there's no arguments.
+    } else if(start === 1 && end === 1) {
+      return [];
+    }
 
     // If there's no arguments, for example [3, 3].
     // We can just flatten this arg 
     if(start === end) {
       return newArgs.reduce((arr,arg,i) => {
 
-        if(i === start - 2) {
-          if(this.customFns[arg]) return [...arr, this.customFns[arg]()];
-          return [...arr, arg + '()'];
+        if(/\w+\=\>/.test(arg) && i === start-2) {
+          arg = arg.slice(0, -2);
+          if(this.customFns[arg]) return [...arr, this.customFns[arg](newArgs.slice(start, end))];
+          return [...arr, arg.toUpperCase() + '(' + newArgs.slice(start, end).join() + ')'];
         }
 
         if(i === start - 1 || i === start) {
@@ -455,9 +461,10 @@ module.exports = class JsonQL {
     if(end - start === 1 || end - start === 2) {
       return newArgs.reduce((arr,arg,i) => {
 
-        if(i === start - 2) {
+        if(/\w+\=\>/.test(arg) && i === start-2) {
+          arg = arg.slice(0, -2);
           if(this.customFns[arg]) return [...arr, this.customFns[arg](newArgs.slice(start, end))];
-          return [...arr, arg + '(' + newArgs.slice(start, end).join() + ')'];
+          return [...arr, arg.toUpperCase() + '(' + newArgs.slice(start, end).join() + ')'];
         }
 
         if(i === start - 1 || i === start || i === end) {
@@ -476,9 +483,11 @@ module.exports = class JsonQL {
     if(end - start > 2) {
       return newArgs.reduce((arr,arg,i) => {
 
-        if(i === start - 2) {
-          if(this.customFns[arg]) return [...arr, this.customFns[arg](newArgs.slice(start, end))];
-          return [...arr, arg + '(' + newArgs.slice(start, end).join() + ')'];
+        console.log('arg: ', i, arg);
+
+        if(/\w+\=\>/.test(arg) && i === start-2) {
+          if(this.customFns[arg]) return [...arr, this.customFns[arg]()];
+          return [...arr, arg + '()'];
         }
 
         if(i === start - 1 || (i >= start && i <= end)) {
@@ -692,9 +701,13 @@ module.exports = class JsonQL {
   funcValid(db, table, name) {
     const func = name.slice(0, name.indexOf('=>'))
     let valid = false;
-    const columns = name.slice(func.length + 2).match(/\w+\=\>|[\(\)]|[`"'](.*?)[`"']|\$*(\w+\.)+\w+|\$*\w+|\\|\/|\+|>=|<=|=>|>|<|-|\*|=/g);
+    // const columns = name.slice(func.length + 2).match(/\w+\=\>|[\(\)]|[`"'](.*?)[`"']|\$*(\w+\.)+\w+|\$*\w+|\\|\/|\+|>=|<=|=>|>|<|-|\*|=/g);
+    // I've removed the () check from this regex because it was knocking a function with no args from the query.
+    const columns = name.slice(func.length + 2).match(/\w+\=\>|[`"'](.*?)[`"']|\$*(\w+\.)+\w+|\$*\w+|\\|\/|\+|>=|<=|=>|>|<|-|\*|=/g);
     // No arguments return true.
-    if(!columns) return true; 
+    if(!columns) {
+      return true; 
+    }
     columns.forEach(nm => {
       if(this.nameStringValid(db, table, nm)){
         valid = true;

@@ -330,7 +330,6 @@ That's done! I think. There's a couple of things to remember about custom functi
 and *with* it's parenthesees, eg 'CONCAT()'.
 
 
-==== MARK 
 
 Fix the functions logic. I've assumed that all of the arguments are functions
 by using the condition `if(i === start - 2)`. This grabs the function name and
@@ -342,6 +341,10 @@ So to fix it, rather than converting all the function names into CAPS at the beg
 we'll leave them so we can check they're function names with a regex (/\w+\=\>/) 
 within the loop, then we can just convert them as we go.
 
+==== MARK 
+
+The functions should be working, they'll need some more testing. You can't use
+them with `as` in a join for the nested json functionality so get that working next.
 
 
 
