@@ -330,15 +330,28 @@ That's done! I think. There's a couple of things to remember about custom functi
 and *with* it's parenthesees, eg 'CONCAT()'.
 
 
-
-
-
-
-
-
-
-
 ==== MARK 
+
+Fix the functions logic. I've assumed that all of the arguments are functions
+by using the condition `if(i === start - 2)`. This grabs the function name and
+adds arguments to it. But what if the arguments aren't functions and the 
+args being passed are just one big argument. Another thing is if `start` is
+1 then start - 2 is -1! Which also breaks everything.
+
+So to fix it, rather than converting all the function names into CAPS at the beginning
+we'll leave them so we can check they're function names with a regex (/\w+\=\>/) 
+within the loop, then we can just convert them as we go.
+
+
+
+
+
+
+
+
+
+
+
 
 Auto key and hidden to the schema.
 Make json query strings compatible with data keys

@@ -314,6 +314,7 @@ module.exports = class JsonQL {
   // setNameString=>
   setNameString(db, table, name) {
 
+    console.log(name);
     if(/^\w+\=\>/.test(name)) {
       return this.funcString(db, table, name);
     }
@@ -344,6 +345,8 @@ module.exports = class JsonQL {
   // convertFunc=>
   convertFunc(func, args) {
 
+    console.log('args: ', args);
+
     let newArgs = args;
 
     // Convert all function names that aren't custom functions
@@ -358,13 +361,14 @@ module.exports = class JsonQL {
     // Make an array of arrays of positions of all the arguments.
     // This starts from the first arg to the closing bracket.
     // We never capture the opening bracket.
-    let argPositions = this.getArgPositions(newArgs);
+    let argPositions = [];
 
     // In a loop keep flattening the arguments and re-calibrating
     // the argument positions until there's one big argument left.
     do {
-      newArgs = this.flattenArgs(newArgs, argPositions);
       argPositions = this.getArgPositions(newArgs);
+      newArgs = this.flattenArgs(newArgs, argPositions);
+      console.log('newArgs: ', newArgs);
     } while (argPositions.length > 1);
 
     // If it's custom call it, if not return it with the name at the front
@@ -419,6 +423,7 @@ module.exports = class JsonQL {
   flattenArgs(newArgs, argPositions) {
     let start = argPositions[0][0];
     let end = argPositions[0][1];
+    console.log('arg positions: ', argPositions);
     // start === end      < No arguments:  '()'               [ 7, 7 ]
     // end - start === 1  < One argument:  '("hi")'           [ 7, 8 ]
     // end - start === 2  < Two arguments: '("hi", CONCAT())' [ 7, 9 ]
