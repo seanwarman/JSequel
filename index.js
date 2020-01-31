@@ -209,8 +209,6 @@ module.exports = class JsonQL {
   parseNestedSelect(queryObj) {
     const {db, table} = this.splitDbAndTableNames(queryObj.name);
 
-    console.log('queryObj: ', queryObj);
-
     if(queryObj.columns.length === 0) {
       this.errors.push(`No columns included at ${db}.${table}`);
       return '';
@@ -316,7 +314,6 @@ module.exports = class JsonQL {
   // setNameString=>
   setNameString(db, table, name) {
 
-    console.log(name);
     if(/^\w+\=\>/.test(name)) {
       return this.funcString(db, table, name);
     }
@@ -330,7 +327,6 @@ module.exports = class JsonQL {
   // funcString=>
   funcString(db, table, name) {
     const func = name.slice(0, name.indexOf('=>'))
-    console.log('name: ', name);
 
     let args = name.slice(
       func.length + 2
@@ -361,8 +357,6 @@ module.exports = class JsonQL {
       argPositions = this.getArgPositions(newArgs);
       newArgs = this.flattenArgs(newArgs, argPositions);
     } while (argPositions.length > 1);
-    console.log('newArgs: ', newArgs);
-    console.log('argPositions: ', argPositions);
 
     // If it's custom call it, if not return it with the name at the front
     // I'm doing toUpperCase here just to denote it's definitely a mysql function.
@@ -482,8 +476,6 @@ module.exports = class JsonQL {
     // like any other argument.
     if(end - start > 2) {
       return newArgs.reduce((arr,arg,i) => {
-
-        console.log('arg: ', i, arg);
 
         if(/\w+\=\>/.test(arg) && i === start-2) {
           if(this.customFns[arg]) return [...arr, this.customFns[arg]()];

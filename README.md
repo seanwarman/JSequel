@@ -295,6 +295,54 @@ You can even nest functions inside one another.
 name: 'concat=>("Todays date: " date=>())'
 ```
 
+All function names must be preceeded by `=>()`. All arguments are 
+seperated by a single space unless inside a " string ".
+
+Functions can be used in any `name` param accept for the top level database.table
+`name` and in nested json selections, but that is a TODO on my list.
+
+# Custom Functions
+
+Add custom functions using `addCustomFns` in your node controller
+to make any kind of custom selection.
+
+```js
+const jseq = new JSQ(schema);
+
+jseq.addCustomFns({
+  firstAndLast() {
+    return 'CONCAT(firstName, " ", lastName)';
+  }
+});
+
+let jqueryObj = jseq.selectQL({
+  name: 'macDonalds.employees',
+  columns: [
+    {name: 'firstAndLast=>()', as: 'fullName'}
+  ]
+});
+```
+
+You can also add arguments to custom functions...
+
+```js
+{name: 'firstAndLast=>(firstName " " lastName)', as: 'fullName'}
+```
+
+That'll be passed through as individual strings.
+
+```js
+firstAndLast(first, space, last) {
+  return `CONCAT(${first}, ${space}, ${last})`;
+}
+```
+
+A custom function must always return a string. You can't nest 
+custom functions inside one another but you can send 
+mysql functions to them as string arguments, which will then
+be interpreted in your query.
+
+
 # JQString (Json Query Strings)
 For tables with json type fields you can use a json query string to select specific values in an array.
 All json query strings must start with a `$`, after that they're the same as javascript syntax.

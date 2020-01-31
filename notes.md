@@ -343,11 +343,13 @@ within the loop, then we can just convert them as we go.
 
 ==== MARK 
 
+Nested functions no longer work. For example...
+{name: 'replace=>(replace=>(bookingName "%20" " ") "K" "SS")', as: 'bookingName'},
+
 The functions should be working, they'll need some more testing. You can't use
 them with `as` in a join for the nested json functionality so get that working next.
 
-
-
+Allow functions to be used on the top level `name` param for full control of a custom query.
 
 
 
@@ -363,6 +365,7 @@ Have update and create return the record they created/updated.
 Input and output custom functions (myFunc=> myFunc->)
 
 Could custom functions not return a string and instead *do* something?
+Allow custom functions to be nested inside one another.
 
 Make json query strings compatible with `where` strings.
 
