@@ -349,6 +349,48 @@ The functions should be working, they'll need some more testing.
 Allow functions to be used on the top level `name` param for full control of a custom query.
 The setNameString function is a bit mixed up. See index.js:218
 
+The way the structure works at the moment is:
+
+**selectSQ** = Entrypoint, runs validation, then parses queryObject then returns results.
+**parseSelect** = Builds each part of the query as seperate strings SELECT, FROM, WHERE, LIMIT, AS. The returns the queryString.
+
+Each string in **parseSelect** is built with a basic map except the *columns* array which has some special functions to handle it:
+
+We do a *columns*.map which decides what to do with each column item. Here is where I think things should be done a bit differently.
+Although ultimately this might end up impacting the whole structure seeing as the parent object should really be treated just like
+an item in *columns*.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 You can't use custom functions with `as` in a join for the nested json functionality so get that working next.
 
 
