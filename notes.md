@@ -264,9 +264,6 @@ Make the custom functions feature.
 If we have the string
 (bookingDivName concat=>(" a thing" myFun=>() myFunc=>(concat=>())) " yet another thing")
 
-Actually whats wrong with just converting the whole string capitalising any func names not in custom funcs and
-combining their brackets then finally calling the customfuncs on each func that's left.
-
 We get the array..
 args = (, bookingDivName, concat=>, (, " a thing", myFunc=>, (, ), myFunc=>, (, concat=>, (, ), ), ), " yet another thing", )
        0  1               2         3  4           5         6  7  8         9  10        11 12 13 14 15                    16
