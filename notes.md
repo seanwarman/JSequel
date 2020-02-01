@@ -345,15 +345,14 @@ within the loop, then we can just convert them as we go.
 Nested functions no longer work. For example...
 {name: 'replace=>(replace=>(bookingName "%20" " ") "K" "SS")', as: 'bookingName'},
 
-The functions should be working, they'll need some more testing. You can't use
-them with `as` in a join for the nested json functionality so get that working next.
+The functions should be working, they'll need some more testing. 
 
 ==== MARK 
 
 Allow functions to be used on the top level `name` param for full control of a custom query.
 The setNameString function is a bit mixed up. See index.js:218
 
-
+You can't use custom functions with `as` in a join for the nested json functionality so get that working next.
 
 
 
