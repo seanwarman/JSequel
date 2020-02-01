@@ -215,10 +215,16 @@ module.exports = class JsonQL {
     }
     return queryObj.columns.map(col => {
 
+      // TODO: this is the wrong way around. The setNameString function
+      // should be the outermost function that then checks all the conditions
+      // and decides where to go. So the below code should be inside setNameString.
       if(/^\w+\.\w+$/g.test(col.name)) return this.parseNestedSelect(col);
 
       let name = this.setNameString(db, table, col.name);
-      let as = ` AS ${name}`;
+      // TODO: if you find the `as` logic not working properly
+      // the problem could be here. I'm not sure whether to 
+      // use col.name here or leave it blank.
+      let as = ` AS ${col.name}`;
       if(col.as) {
         as = ` AS ${col.as}`;
       }
@@ -344,6 +350,9 @@ module.exports = class JsonQL {
   // convertFunc=>
   convertFunc(func, args) {
 
+    console.log('func :', func);
+    console.log('args :', args);
+
     let newArgs = args;
 
     // Make an array of arrays of positions of all the arguments.
@@ -355,7 +364,9 @@ module.exports = class JsonQL {
     // the argument positions until there's one big argument left.
     do {
       argPositions = this.getArgPositions(newArgs);
+      console.log('argPositions :', argPositions);
       newArgs = this.flattenArgs(newArgs, argPositions);
+      console.log('newArgs :', newArgs);
     } while (argPositions.length > 1);
 
     // If it's custom call it, if not return it with the name at the front
@@ -452,7 +463,8 @@ module.exports = class JsonQL {
     // if there's two arguments, for example [ 8, 10 ].
     // These are arguments that are definitely not unflattened functions
     // and can be flattened. 
-    if(end - start === 1 || end - start === 2) {
+    // if(end - start === 1 || end - start === 2) {
+    if(end > start) {
       return newArgs.reduce((arr,arg,i) => {
 
         if(/\w+\=\>/.test(arg) && i === start-2) {
@@ -461,7 +473,7 @@ module.exports = class JsonQL {
           return [...arr, arg.toUpperCase() + '(' + newArgs.slice(start, end).join() + ')'];
         }
 
-        if(i === start - 1 || i === start || i === end) {
+        if(i === start - 1 || (i >= start && i <= end)) {
           return arr;
         }
 
@@ -474,22 +486,22 @@ module.exports = class JsonQL {
     // Any of these arguments could be a function with many
     // arguments. If they're not custom we just treat them
     // like any other argument.
-    if(end - start > 2) {
-      return newArgs.reduce((arr,arg,i) => {
+    // if(end - start > 2) {
+    //   return newArgs.reduce((arr,arg,i) => {
 
-        if(/\w+\=\>/.test(arg) && i === start-2) {
-          if(this.customFns[arg]) return [...arr, this.customFns[arg]()];
-          return [...arr, arg + '()'];
-        }
+    //     if(/\w+\=\>/.test(arg) && i === start-2) {
+    //       if(this.customFns[arg]) return [...arr, this.customFns[arg]()];
+    //       return [...arr, arg + '()'];
+    //     }
 
-        if(i === start - 1 || (i >= start && i <= end)) {
-          return arr;
-        }
+    //     if(i === start - 1 || (i >= start && i <= end)) {
+    //       return arr;
+    //     }
 
-        return [...arr, arg];
+    //     return [...arr, arg];
 
-      });
-    }
+    //   });
+    // }
   }
 
   // +~====*************************====~+
