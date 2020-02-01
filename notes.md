@@ -350,11 +350,6 @@ them with `as` in a join for the nested json functionality so get that working n
 
 ==== MARK 
 
-functions are working again. Custom functions have a small problem, if the column item
-looks like...
-{name: 'myFunc=()'}
-it doesn't return anything in the query. The problem seems to be around index.js:374
-
 Allow functions to be used on the top level `name` param for full control of a custom query.
 The setNameString function is a bit mixed up. See index.js:218
 

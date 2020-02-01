@@ -350,9 +350,6 @@ module.exports = class JsonQL {
   // convertFunc=>
   convertFunc(func, args) {
 
-    console.log('func :', func);
-    console.log('args :', args);
-
     let newArgs = args;
 
     // Make an array of arrays of positions of all the arguments.
@@ -364,16 +361,18 @@ module.exports = class JsonQL {
     // the argument positions until there's one big argument left.
     do {
       argPositions = this.getArgPositions(newArgs);
-      console.log('argPositions :', argPositions);
       newArgs = this.flattenArgs(newArgs, argPositions);
-      console.log('newArgs :', newArgs);
     } while (argPositions.length > 1);
 
     // If it's custom call it, if not return it with the name at the front
     // I'm doing toUpperCase here just to denote it's definitely a mysql function.
-    if(this.customFns[func]) return this.customFns[func](newArgs);
-    // return `${func.toUpperCase()}(${newArgs.slice(1, -1).join()})`;
-    let str = `${func.toUpperCase()}(${newArgs.join()})`;
+    let str = '';
+    if(this.customFns[func]) {
+      str = this.customFns[func](newArgs);
+    } else {
+      // return `${func.toUpperCase()}(${newArgs.slice(1, -1).join()})`;
+      str = `${func.toUpperCase()}(${newArgs.join()})`;
+    }
     return str;
   }
 
