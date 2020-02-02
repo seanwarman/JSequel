@@ -407,7 +407,10 @@ You can't use custom functions with `as` in a join for the nested json functiona
 
 
 
-
+Allow a string to be passed to the query as well as a query object...
+`createSQ('mcDonalds.meals', data);`
+`selectSQ('filterOptions=>()');`
+`updateSQ('mcDonalds.meals.mealKey = "123"', data);`
 
 Auto key and hidden to the schema.
 Make json query strings compatible with data keys
