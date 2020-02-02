@@ -344,15 +344,22 @@ Nested functions no longer work. For example...
 
 The functions should be working, they'll need some more testing. 
 
+
+
+
+
 ==== MARK 
 
 Allow functions to be used on the top level `name` param for full control of a custom query.
 The setNameString function is a bit mixed up. See index.js:218
 
+Because this feature works at the very top level it would potentially have a high impact on the
+rest of the design and so there's some things I think I should clean up before adding it.
+
 The way the structure works at the moment is:
 
-**selectSQ** = Entrypoint, runs validation, then parses queryObject then returns results.
-**parseSelect** = Builds each part of the query as seperate strings SELECT, FROM, WHERE, LIMIT, AS. The returns the queryString.
+**selectSQ** = Entrypoint, runs validation, then parses queryObject then returns results. The validation runs first over everything.
+**parseSelect** = Builds each part of the query as seperate strings SELECT, FROM, WHERE, LIMIT, AS. Then returns the queryString.
 
 Each string in **parseSelect** is built with a basic map except the *columns* array which has some special functions to handle it:
 
@@ -360,11 +367,15 @@ We do a *columns*.map which decides what to do with each column item. Here is wh
 Although ultimately this might end up impacting the whole structure seeing as the parent object should really be treated just like
 an item in *columns*.
 
+What I think should be happening is, **parseNestedJson** and **parseNestedSelect** are inside **parseSelect** when they should be
+further down the chain inside **setNameString**.
 
+The problem with moving them is that the `as` logic gets a bit moxed up. This is because **setNameString** accepts `col.name` and so
+doesn't deal with `col.as`. **parseNestedJson** and **parseNestedSelect** both accept the whole `col` object. I could simply have
+**setNameString** accept the whole `col` object as well but issues arise because I've hinched in the `as` param to return a nested
+which actualy mis-aligns with how mysql uses AS but is such a great feature from a user perspective it should definitely stay. 
 
-
-
-
+Work out exactly where `as` should be handled and how.
 
 
 
