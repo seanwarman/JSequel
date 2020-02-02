@@ -378,6 +378,54 @@ which actualy mis-aligns with how mysql uses AS but is such a great feature from
 Work out exactly where `as` should be handled and how.
 
 
+parseSelect({
+  name: 'bms.booking.bookings',
+  columns: [],
+  where: []
+})
+
+If this object has an `as` *and* the name is 'something.somthing' it will run a 
+parseNestedJson on it, every `as` inside that function will be put into the columns
+as for each param to decide on the name of the param inside the json object returned.
+
+If it hasn't got an `as` but the name is 'something.something' it will call
+parseNestedSelect, which is the same as parseSelect but slighetly different...
+
+What's difference between parseNestedSelect and parseSelect?
+
+1. parseNestedSelect objects *must* have a `columns` array. Although parseSelect
+   actually sends back a empty string in the SELECT if there's no cols which
+   breaks the query and essentially does the same thing.
+2. parseNestedSelect doesn't parse nested json objects.
+3. parseNestedSelect gives the `col.name` as the AS if there's no `col.as` param.
+   whereas parseSelect just leaves it out.
+4. Major difference: parseNestedSelect uses WHERE and parseSelect uses HAVING.
+5. parseNestedSelect looks for a LIMIT on `col.limit` as well as `queryObj.limit`, 
+   which looks like a mistake.
+
+They're pretty much the same except for the fact that parseNestedSelect actually runs a 
+big map.().join() over the whole column, meaning it nests a big select inside each `name` 
+item but we could just do this by routing back to parseSelect from setNameString. So we
+should be able to get rid of parseNestedSelect completely.
+
+setNameString should be like a router that decides what to do with each name string. It 
+should be full of `if` statements.
+
+I've realised the need for nestedSelect. It deals with the fact that you can't have more 
+than one column name in a nested select, we use the `as` param in a totally different 
+place for nested selects. 
+
+parseNestedSelect: '(SELECT param FROM ...) AS thing'
+parseSelect:       '(SELECT param AS thing, param AS thing FROM ...)'
+
+That's fine, we'll just keep parseNestedSelect but put it into setNameString instead of
+having it directly inside parseSelect.
+
+Finally now we can put anything in the top level `name` and then we know we just go to
+**setNameString** to write the condition and function to handle it.
+
+
+
 
 
 

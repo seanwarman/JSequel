@@ -289,7 +289,7 @@ FROM
 macDonalds.employees
 ```
 
-You can even nest functions inside one another.
+You can nest functions inside one another.
 
 ```js
 name: 'concat=>("Todays date: " date=>())'
@@ -310,7 +310,7 @@ to make any kind of custom selection.
 const jseq = new JSQ(schema);
 
 jseq.addCustomFns({
-  firstAndLast() {
+  firstAndLast: () => {
     return 'CONCAT(firstName, " ", lastName)';
   }
 });
@@ -337,11 +337,34 @@ firstAndLast(first, space, last) {
 }
 ```
 
+Custom functions can be used to replace a whole query. If you 
+want JSequel to do something a bit more complicated, make
+the whole query inside the custom function and then call it
+inside the first `name` param.
+
+```js
+jseq.addCustomFns({
+  unionRecords: (...columns) => {
+    return columns.map(colName => (
+      `
+        SELECT
+        *
+        FROM
+        ${colName}
+      `
+    )).join(' UNION ');
+  }
+});
+
+let jqueryObj = jseq.selectQL({
+  name: 'unionRecords=>(macDonalds.orders macDonalds.meals)'
+});
+```
+
 A custom function must always return a string. You can't nest 
 custom functions inside one another but you can send 
 mysql functions to them as string arguments, which will then
 be interpreted in your query.
-
 
 # JQString (Json Query Strings)
 For tables with json type fields you can use a json query string to select specific values in an array.

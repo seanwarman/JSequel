@@ -25,7 +25,7 @@ module.exports = class JsonQL {
   // selectSQ=>
   selectSQ(queryObj) {
     this.validateQueryObject(queryObj);
-    let query = this.parseSelect(queryObj);
+    let query = this.buildSelect(queryObj);
 
     if(this.fatalError) {
       return {
@@ -45,7 +45,7 @@ module.exports = class JsonQL {
   createSQ(queryObj, data) {
     this.validateQueryObject(queryObj);
     data = this.removeDisallowedKeys(queryObj, data);
-    let query = this.parseCreate(queryObj, data);
+    let query = this.buildCreate(queryObj, data);
 
     if(this.fatalError) {
       return {
@@ -65,7 +65,7 @@ module.exports = class JsonQL {
   updateSQ(queryObj, data) {
     this.validateQueryObject(queryObj);
     data = this.removeDisallowedKeys(queryObj, data);
-    let query = this.parseUpdate(queryObj, data);
+    let query = this.buildUpdate(queryObj, data);
 
     if(this.fatalError) {
       return {
@@ -84,7 +84,7 @@ module.exports = class JsonQL {
   // deleteSQ=>
   deleteSQ(queryObj) {
     this.validateQueryObject(queryObj);
-    let query = this.parseDelete(queryObj);
+    let query = this.buildDelete(queryObj);
 
     if(this.fatalError) {
       return {
@@ -125,25 +125,23 @@ module.exports = class JsonQL {
     return {columns, values}
   }
 
-  // +~====*************====~+
-  // +~====**'PARSERS'**====~+
-  // +~====*************====~+
+  // +~====************====~+
+  // +~====**'SELECT'**====~+
+  // +~====************====~+
 
-  // parseSelect=>
-  parseSelect(queryObj) {
+  // buildSelect=>
+  buildSelect(queryObj) {
+    if(/^\w+\=\>/.test(queryObj.name)) {
+      return this.funcString(queryObj.name)
+    }
+
     const {db, table} = this.splitDbAndTableNames(queryObj.name);
 
     let select = `SELECT ${
-      queryObj.columns.length > 0 ? 
+      (queryObj.columns || []).length > 0 ? 
         queryObj.columns.map(col => {
 
-
-          // If this name is a database selection we'll want to nest the new select inside the old one.
-          // If there's a col.as it means we want to return a nested json column.
-          if(/^\w+\.\w+$/g.test(col.name) && col.as) return this.parseNestedJson(col);
-          if(/^\w+\.\w+$/g.test(col.name)) return this.parseNestedSelect(col);
-
-          let name = this.setNameString(db, table, col.name);
+          let name = this.setNameString(db, table, col);
           if(col.as) {
             name += ` AS ${col.as}`;
           }
@@ -170,41 +168,114 @@ module.exports = class JsonQL {
     return `(${select}${from}${where}${limit})${as}`;
   }
 
-  // parseNestedJson=>
-  parseNestedJson(queryObj) {
+  // +~====************====~+
+  // +~====**'CREATE'**====~+
+  // +~====************====~+
+
+  // buildCreate=>
+  buildCreate(queryObj, data) {
+    if(/^\w+\=\>/.test(queryObj.name)) {
+      return this.funcString(queryObj.name)
+    }
+
     const {db, table} = this.splitDbAndTableNames(queryObj.name);
-    if(queryObj.columns.length === 0) {
-      this.errors.push(`No columns included at ${db}.${table}`);
+
+    let insert = `INSERT INTO ${db}.${table}`;
+
+    let {columns, values} = this.parseData(db, table, data);
+    let set = ` (${columns.map(c => c).join()}) VALUES (${values.map(v => v).join()})`;
+    return `${insert}${set}`;
+  }
+
+  // +~====************====~+
+  // +~====**'UPDATE'**====~+
+  // +~====************====~+
+
+  // buildUpdate=>
+  buildUpdate(queryObj, data) {
+    if(/^\w+\=\>/.test(queryObj.name)) {
+      return this.funcString(queryObj.name)
+    }
+
+    const {db, table} = this.splitDbAndTableNames(queryObj.name);
+
+    let update = `UPDATE ${db}.${table}`;
+
+    let {columns, values} = this.parseData(db, table, data);
+    let set = ` SET ${columns.map(( key, i ) => `${key} = ${values[i]}`).join()}`;
+
+    if((queryObj.where || []).length === 0 || !queryObj.where) {
+      this.fatalError = true;
+      this.errors.push('No where condition provided. You cannot update all records in the table at once.');
+    }
+
+    let where = (queryObj.where || []).length > 0 ? ` WHERE ${queryObj.where.map(wh => {
+      if(wh.length && typeof wh === 'object') return wh.map(w => w).join(' OR ');
+      return wh;
+    }).join(' AND ')}` : '';
+
+    return `${update}${set}${where}`;
+  }
+
+  // +~====************====~+
+  // +~====**'DELETE'**====~+
+  // +~====************====~+
+
+  // buildDelete=>
+  buildDelete(queryObj) {
+    if(/^\w+\=\>/.test(queryObj.name)) {
+      return this.funcString(queryObj.name)
+    }
+
+    if(!queryObj.where) {
+      this.fatalError = true;
+      this.errors.push('No where string present. JSequel cannot delete all records in a single query.');
       return '';
     }
 
-    let where = ` WHERE ${queryObj.where}`;
-    let limit = '';
-    if(queryObj.limit) {
-      limit = ` LIMIT ${queryObj.limit.map(l => l).join()}`;
-    }
-    let as = ` AS ${queryObj.as}`;
+    const {db, table} = this.splitDbAndTableNames(queryObj.name);
+    let del = `DELETE FROM ${db}.${table}`;
 
-    let keyVals = queryObj.columns.map(col => {
 
-      if(/^\w+\.\w+$/g.test(col.name) && col.as) return this.parseNestedJson(col);
-      if(/^\w+\.\w+$/g.test(col.name)) return this.parseNestedSelect(col);
+    let where = (queryObj.where || []).length > 0 ? ` WHERE ${queryObj.where.map(wh => {
+      if(wh.length && typeof wh === 'object') return wh.map(w => w).join(' OR ');
+      return wh;
+    }).join(' AND ')}` : '';
 
-      let name = this.setNameString(db, table, col.name);
-      let key = col.as ? `'${col.as}'` : `'${col.name}'`;
-      return `${key},${name}`;
-
-    }).join();
-
-    return `(SELECT JSON_ARRAYAGG(JSON_OBJECT(${keyVals})) FROM ${db}.${table}${where}${limit})${as}`;
+    return `${del}${where}`;
   }
 
-  // (SELECT bms_booking.bookings.bookingName,
-  // (SELECT 
-  //   JSON_ARRAYAGG(
-  //     JSON_OBJECT(\'bookingDivName\',bms_booking.bookingDivisions.bookingDivName)
-  //    ) FROM bms_booking.bookingDivisions
-  //    bookings.bookingDivKey = bookingDivisions.bookingDivKey)bookings.bookingDivKey = bookingDivisions.bookingDivKey FROM bms_booking.bookings LIMIT 0,5)
+  // +~====**********************====~+
+  // +~====**'NAME SELECTIONS'***====~+
+  // +~====**********************====~+
+
+  // setNameString=>
+  setNameString(db, table, col) {
+
+    if(/^\w+\.\w+$/g.test(col.name) && col.as) {
+      return this.parseNestedJson(col);
+    }
+
+    if(/^\w+\.\w+$/g.test(col.name)) {
+      return this.parseNestedSelect(col);
+    }
+
+    if(/^\w+\=\>/.test(col.name)) {
+      return this.funcString(col.name);
+    }
+
+    if(/^\$\w+/.test(col.name)) {
+      return this.jQExtract(db, table, col.name);
+    }
+
+    return `${db}.${table}.${col.name}`;
+  }
+
+
+  // +~====*************====~+
+  // +~====**'PARSERS'**====~+
+  // +~====*************====~+
+
   // parseNestedSelect=>
   parseNestedSelect(queryObj) {
     const {db, table} = this.splitDbAndTableNames(queryObj.name);
@@ -218,9 +289,9 @@ module.exports = class JsonQL {
       // TODO: this is the wrong way around. The setNameString function
       // should be the outermost function that then checks all the conditions
       // and decides where to go. So the below code should be inside setNameString.
-      if(/^\w+\.\w+$/g.test(col.name)) return this.parseNestedSelect(col);
+      // if(/^\w+\.\w+$/g.test(col.name)) return this.parseNestedSelect(col);
 
-      let name = this.setNameString(db, table, col.name);
+      let name = this.setNameString(db, table, col);
       // TODO: if you find the `as` logic not working properly
       // the problem could be here. I'm not sure whether to 
       // use col.name here or leave it blank.
@@ -248,90 +319,39 @@ module.exports = class JsonQL {
     }).join();
   }
 
-  // +~====************====~+
-  // +~====**'CREATE'**====~+
-  // +~====************====~+
-
-  // parseCreate=>
-  parseCreate(queryObj, data) {
+  // parseNestedJson=>
+  parseNestedJson(queryObj) {
     const {db, table} = this.splitDbAndTableNames(queryObj.name);
 
-    let insert = `INSERT INTO ${db}.${table}`;
-
-    let {columns, values} = this.parseData(db, table, data);
-    let set = ` (${columns.map(c => c).join()}) VALUES (${values.map(v => v).join()})`;
-    return `${insert}${set}`;
-  }
-
-  // +~====************====~+
-  // +~====**'UPDATE'**====~+
-  // +~====************====~+
-
-  // parseUpdate=>
-  parseUpdate(queryObj, data) {
-    const {db, table} = this.splitDbAndTableNames(queryObj.name);
-
-    let update = `UPDATE ${db}.${table}`;
-
-    let {columns, values} = this.parseData(db, table, data);
-    let set = ` SET ${columns.map(( key, i ) => `${key} = ${values[i]}`).join()}`;
-
-    if((queryObj.where || []).length === 0 || !queryObj.where) {
-      this.fatalError = true;
-      this.errors.push('No where condition provided. You cannot update all records in the table at once.');
-    }
-
-    let where = (queryObj.where || []).length > 0 ? ` WHERE ${queryObj.where.map(wh => {
-      if(wh.length && typeof wh === 'object') return wh.map(w => w).join(' OR ');
-      return wh;
-    }).join(' AND ')}` : '';
-
-    return `${update}${set}${where}`;
-  }
-
-  // +~====************====~+
-  // +~====**'DELETE'**====~+
-  // +~====************====~+
-
-  // parseDelete=>
-  parseDelete(queryObj) {
-    if(!queryObj.where) {
-      this.fatalError = true;
-      this.errors.push('No where string present. JSequel cannot delete all records in a single query.');
+    if(queryObj.columns.length === 0) {
+      this.errors.push(`No columns included at ${db}.${table}`);
       return '';
     }
 
-    const {db, table} = this.splitDbAndTableNames(queryObj.name);
-    let del = `DELETE FROM ${db}.${table}`;
+    let where = ` WHERE ${queryObj.where}`;
+    let limit = '';
 
-
-    let where = (queryObj.where || []).length > 0 ? ` WHERE ${queryObj.where.map(wh => {
-      if(wh.length && typeof wh === 'object') return wh.map(w => w).join(' OR ');
-      return wh;
-    }).join(' AND ')}` : '';
-
-    return `${del}${where}`;
-  }
-
-  // +~====**********************====~+
-  // +~====**'STRING FUNCTIONS'**====~+
-  // +~====**********************====~+
-
-  // setNameString=>
-  setNameString(db, table, name) {
-
-    if(/^\w+\=\>/.test(name)) {
-      return this.funcString(db, table, name);
-    }
-    if(/^\$\w+/.test(name)) {
-      return this.jQExtract(db, table, name);
+    if(queryObj.limit) {
+      limit = ` LIMIT ${queryObj.limit.map(l => l).join()}`;
     }
 
-    return `${db}.${table}.${name}`;
+    let keyVals = queryObj.columns.map(col => {
+
+      let name = this.setNameString(db, table, col);
+      let key = col.as ? `'${col.as}'` : `'${col.name}'`;
+      return `${key},${name}`;
+
+    }).join();
+
+    return `(SELECT JSON_ARRAYAGG(JSON_OBJECT(${keyVals})) FROM ${db}.${table}${where}${limit})`;
   }
+
+  // +~====*************************====~+
+  // +~====******'FUNCTIONS'********====~+
+  // +~====*************************====~+
 
   // funcString=>
-  funcString(db, table, name) {
+  funcString(name) {
     const func = name.slice(0, name.indexOf('=>'))
 
     let args = name.slice(
@@ -342,10 +362,6 @@ module.exports = class JsonQL {
 
     return this.convertFunc(func, args, 0);
   }
-
-  // +~====*************************====~+
-  // +~====******'FUNCTIONS'********====~+
-  // +~====*************************====~+
 
   // convertFunc=>
   convertFunc(func, args) {
@@ -370,7 +386,6 @@ module.exports = class JsonQL {
     if(this.customFns[func]) {
       str = this.customFns[func](newArgs);
     } else {
-      // return `${func.toUpperCase()}(${newArgs.slice(1, -1).join()})`;
       str = `${func.toUpperCase()}(${newArgs.join()})`;
     }
     return str;
@@ -481,26 +496,6 @@ module.exports = class JsonQL {
       },[]);
     }
 
-    // If there's two or more arguments, for example [ 4, 8 ].
-    // Any of these arguments could be a function with many
-    // arguments. If they're not custom we just treat them
-    // like any other argument.
-    // if(end - start > 2) {
-    //   return newArgs.reduce((arr,arg,i) => {
-
-    //     if(/\w+\=\>/.test(arg) && i === start-2) {
-    //       if(this.customFns[arg]) return [...arr, this.customFns[arg]()];
-    //       return [...arr, arg + '()'];
-    //     }
-
-    //     if(i === start - 1 || (i >= start && i <= end)) {
-    //       return arr;
-    //     }
-
-    //     return [...arr, arg];
-
-    //   });
-    // }
   }
 
   // +~====*************************====~+
@@ -597,6 +592,10 @@ module.exports = class JsonQL {
 
   // validateQueryObject=>
   validateQueryObject(queryObj) {
+    if(/^\w+\=\>/.test(queryObj.name)) {
+      return true;
+    }
+
     const {db,table} = this.splitDbAndTableNames(queryObj.name);
     this.dbTableNames.push({db, table});
 
