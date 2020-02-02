@@ -286,11 +286,6 @@ module.exports = class JsonQL {
     }
     return queryObj.columns.map(col => {
 
-      // TODO: this is the wrong way around. The setNameString function
-      // should be the outermost function that then checks all the conditions
-      // and decides where to go. So the below code should be inside setNameString.
-      // if(/^\w+\.\w+$/g.test(col.name)) return this.parseNestedSelect(col);
-
       let name = this.setNameString(db, table, col);
       // TODO: if you find the `as` logic not working properly
       // the problem could be here. I'm not sure whether to 

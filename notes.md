@@ -344,12 +344,6 @@ Nested functions no longer work. For example...
 
 The functions should be working, they'll need some more testing. 
 
-
-
-
-
-==== MARK 
-
 Allow functions to be used on the top level `name` param for full control of a custom query.
 The setNameString function is a bit mixed up. See index.js:218
 
@@ -449,8 +443,21 @@ Finally now we can put anything in the top level `name` and then we know we just
 
 
 
+==== MARK 
 
-You can't use custom functions with `as` in a join for the nested json functionality so get that working next.
+Make json query strings compatible with data keys
+
+
+There's a small bug where if you put a function in a nested select
+the `as` will automatically be set to the original function string syntax...
+` AS count=>(meals)`
+...which breaks the query. You can just put an `as` in to fix it but
+it should render as...
+` AS COUNT(meals)`
+I think the problem lies in the fact that **setNameString** should
+probably be handling the `as` as well whereas at the moment it's outside it.
+But because we have the funny `as` behaviour with the nested selects it's
+a little bit complicated.
 
 
 
@@ -461,7 +468,6 @@ Allow a string to be passed to the query as well as a query object...
 `updateSQ('mcDonalds.meals.mealKey = "123"', data);`
 
 Auto key and hidden to the schema.
-Make json query strings compatible with data keys
 Have update and create return the record they created/updated.
 
 Input and output custom functions (myFunc=> myFunc->)
@@ -470,11 +476,6 @@ Could custom functions not return a string and instead *do* something?
 Allow custom functions to be nested inside one another.
 
 Make json query strings compatible with `where` strings.
-
-For some reason the `limit` doesn't work inside nested json queries.
-This LIMIT doesn't do anything. See if you can get it working.
-`(select JSON_ARRAYAGG(JSON_OBJECT("fileName", uploads.fileName, "tmpUploadKey", uploads.uploadKey)) from uploads where bookings.bookingsKey = uploads.bookingsKey LIMIT 0,5) as uploads`
-
 
 
 
