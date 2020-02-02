@@ -1,4 +1,4 @@
-# JSequel (BETA)
+# JSequel
 A small framework for controlling your API endpoints from the frontend. Much
 like GraphQL but lighter and less obtrusive to your already complicated
 stack. 
