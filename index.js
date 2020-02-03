@@ -138,7 +138,7 @@ module.exports = class JsonQL {
       if(typeof data[key] === 'number') {
         values.push(data[key]);
       } else if(typeof data[key] === 'string') {
-        values.push(`'${data[key]}'`);
+        values.push(data[key]);
       } else {
         return;
       }
