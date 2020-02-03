@@ -63,8 +63,8 @@ module.exports = class JsonQL {
   }
   // updateSQ=>
   updateSQ(queryObj, data) {
-    this.validateQueryObject(queryObj);
-    data = this.removeDisallowedKeys(queryObj, data);
+    // this.validateQueryObject(queryObj);
+    // data = this.removeDisallowedKeys(queryObj, data);
     let query = this.buildUpdate(queryObj, data);
 
     if(this.fatalError) {
@@ -105,22 +105,43 @@ module.exports = class JsonQL {
   // +~====**DATA**====~+
   // +~====********====~+
 
+  // setJQString=>
+  setJQString(db, table, key, value) {
+
+    let column = this.extractColFromJQString(db, table, key);
+
+    column = `${db}.${table}.${column}`;
+
+    value = `IF(
+      ${this.jQSet(db, table, key, value)} IS NOT NULL,
+      ${this.jQSet(db, table, key, value)},
+      ${column}
+    )`;
+
+    return {column, value};
+  }
+
   // parseData=>
   parseData(db, table, data) {
     let values = [];
     let columns = [];
     Object.keys(data).forEach(key => {
+      if(/^\$/.test(key)) {
+        let jqObj = this.setJQString(db,table,key,data[key])
+        columns.push(jqObj.column);
+        values.push(jqObj.value);
+        return;
+      } else {
+        columns.push(key);
+      }
 
       if(typeof data[key] === 'number') {
-        columns.push(key);
         values.push(data[key]);
       } else if(typeof data[key] === 'string') {
-        columns.push(key);
         values.push(`'${data[key]}'`);
       } else {
         return;
       }
-
     });
     return {columns, values}
   }
@@ -497,6 +518,12 @@ module.exports = class JsonQL {
   // +~====**'JSONQUERY FUNCTIONS'**====~+
   // +~====*************************====~+
 
+  // extractColFromJQString=>
+  extractColFromJQString(db, table, jQString) {
+    let column = jQString.slice(1, jQString.search(/[\.\[]/));
+    return column;
+  }
+
   // jQExtract=>
   jQExtract(db, table, jQStr) {
     const regx = /(\$\w+)|(\[\d\])|(\.\w+)|(\[\?[\w\s@#:;{},.!"£$%^&*()/?|`¬\-=+~]*\])/g
@@ -537,6 +564,17 @@ module.exports = class JsonQL {
       string = string.slice(2, -1);
       return `CONCAT(${prevString}, CONCAT('[',SUBSTR(JSON_SEARCH(JSON_EXTRACT(${name}, "$"),'one','${string}'), 4,LOCATE(']',JSON_SEARCH(JSON_EXTRACT(${name}, "$"), 'one', '${string}'))-4),']'))`;
     }
+  }
+
+  // jQSet=>
+  jQSet(db, table, jQStr, value) {
+    if(typeof value === 'string') {
+      value = `'${value}'`;
+    }
+    const regx = /(\$\w+)|(\[\d\])|(\.\w+)|(\[\?[\w\s@#:;{},.!"£$%^&*()/?|`¬\-=+~]*\])/g
+    const matches = jQStr.match(regx);
+    const name = `${db}.${table}.${matches[0].slice(1)}`
+    return `JSON_SET(${name}, ${this.jQStringMaker(name, matches)}, ${value})`;
   }
 
   // +~====***************====~+
