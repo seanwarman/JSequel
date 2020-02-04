@@ -443,11 +443,21 @@ Finally now we can put anything in the top level `name` and then we know we just
 
 
 
-==== MARK 
 
 Make json query strings compatible with data keys
 This works but it doesn't work if you try to set
 a value to a json object. It just sets it as a string.
+
+
+==== MARK 
+
+The error handling is much better in the jsonql, this is because
+all the errors are generated as the query is built which at first seems more
+confusing but it actually makes more sense. Now you have a good idea
+of the structure of jseq add the error handling back in rather than
+doing it all first.
+
+
 
 
 There's a small bug where if you put a function in a nested select

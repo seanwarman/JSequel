@@ -105,11 +105,25 @@ module.exports = class JsonQL {
   // +~====**DATA**====~+
   // +~====********====~+
 
+  // setValueString=>
+  setValueString(value) {
+    if(typeof value === 'object' && value.forEach) {
+      return `JSON_ARRAY(${value.map(val => this.setValueString(val)).join()})`;
+    }
+    if(typeof value === 'object' && !value.forEach) {
+      return `JSON_OBJECT(${Object.keys(value).map(key => `${this.setValueString(key)}, ${this.setValueString(value[key])}`).join()})`;
+    }
+    if(typeof value === 'number') {
+      return `${value}`;
+    }
+    if(typeof value === 'string') {
+      return `"${value}"`;
+    }
+  }
+
   // setJQString=>
   setJQString(db, table, key, value) {
-
     let column = this.extractColFromJQString(db, table, key);
-
     column = `${db}.${table}.${column}`;
 
     value = `IF(
@@ -127,20 +141,12 @@ module.exports = class JsonQL {
     let columns = [];
     Object.keys(data).forEach(key => {
       if(/^\$/.test(key)) {
-        let jqObj = this.setJQString(db,table,key,data[key])
+        let jqObj = this.setJQString(db,table,key,this.setValueString(data[key]));
         columns.push(jqObj.column);
         values.push(jqObj.value);
-        return;
       } else {
+        values.push(this.setValueString(data[key]));
         columns.push(key);
-      }
-
-      if(typeof data[key] === 'number') {
-        values.push(data[key]);
-      } else if(typeof data[key] === 'string') {
-        values.push(data[key]);
-      } else {
-        return;
       }
     });
     return {columns, values}
@@ -568,9 +574,6 @@ module.exports = class JsonQL {
 
   // jQSet=>
   jQSet(db, table, jQStr, value) {
-    if(typeof value === 'string') {
-      value = `'${value}'`;
-    }
     const regx = /(\$\w+)|(\[\d\])|(\.\w+)|(\[\?[\w\s@#:;{},.!"£$%^&*()/?|`¬\-=+~]*\])/g
     const matches = jQStr.match(regx);
     const name = `${db}.${table}.${matches[0].slice(1)}`
