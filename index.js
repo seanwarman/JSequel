@@ -24,7 +24,7 @@ module.exports = class JsonQL {
 
   // selectSQ=>
   selectSQ(queryObj) {
-    this.validateQueryObject(queryObj);
+    // this.validateQueryObject(queryObj);
     let query = this.buildSelect(queryObj);
 
     if(this.fatalError) {
@@ -43,8 +43,8 @@ module.exports = class JsonQL {
   }
   // createSQ=>
   createSQ(queryObj, data) {
-    this.validateQueryObject(queryObj);
-    data = this.removeDisallowedKeys(queryObj, data);
+    // this.validateQueryObject(queryObj);
+    // data = this.removeDisallowedKeys(queryObj, data);
     let query = this.buildCreate(queryObj, data);
 
     if(this.fatalError) {
@@ -83,7 +83,7 @@ module.exports = class JsonQL {
   }
   // deleteSQ=>
   deleteSQ(queryObj) {
-    this.validateQueryObject(queryObj);
+    // this.validateQueryObject(queryObj);
     let query = this.buildDelete(queryObj);
 
     if(this.fatalError) {
@@ -140,14 +140,20 @@ module.exports = class JsonQL {
     let values = [];
     let columns = [];
     Object.keys(data).forEach(key => {
+      let col;
+      let val;
       if(/^\$/.test(key)) {
         let jqObj = this.setJQString(db,table,key,this.setValueString(data[key]));
-        columns.push(jqObj.column);
-        values.push(jqObj.value);
+        col = jqObj.column;
+        val = jqObj.value;
       } else {
-        values.push(this.setValueString(data[key]));
-        columns.push(key);
+        val = this.setValueString(data[key]);
+        col = key;
       }
+      if(!this.dbTableColumnValid(db, table, col)) return;
+      if(!this.plainStringValid(val)) return;
+      columns.push(col);
+      values.push(val);
     });
     return {columns, values}
   }
@@ -164,27 +170,31 @@ module.exports = class JsonQL {
 
     const {db, table} = this.splitDbAndTableNames(queryObj.name);
 
-    let select = `SELECT ${
-      (queryObj.columns || []).length > 0 ? 
-        queryObj.columns.map(col => {
+    let columns = [];
+    if((queryObj.columns || []).length > 0) {
+      queryObj.columns.forEach(col => {
 
-          let name = this.setNameString(db, table, col);
-          if(col.as) {
-            name += ` AS ${col.as}`;
-          }
-          return name
-        }).join() 
-      : 
-      ''
-    }`;
+        let name = this.setNameString(db, table, col);
+        if(!name) {
+          return;
+        }
+
+        if(col.as) {
+          name += ` AS ${col.as}`;
+        }
+        columns.push(name);
+      });
+    } else {
+      this.errors.push('A Jseq select must have at least one column defined');
+      this.fatalError = true;
+    }
+
+    let select = `SELECT ${columns.join()}`;
 
     let from = ` FROM ${queryObj.name}`;
 
     // The outer parent object finds using a HAVING but the nested one's use WHERE.
-    let where = (queryObj.where || []).length > 0 ? ` HAVING ${queryObj.where.map(wh => {
-      if(wh.length && typeof wh === 'object') return wh.map(w => w).join(' OR ');
-      return wh;
-    }).join(' AND ')}` : '';
+    let where = this.setWhString(queryObj, ' HAVING ');
 
     let limit = queryObj.limit ? ` LIMIT ${queryObj.limit.map(n => n).join()}` : '';
 
@@ -236,10 +246,7 @@ module.exports = class JsonQL {
       this.errors.push('No where condition provided. You cannot update all records in the table at once.');
     }
 
-    let where = (queryObj.where || []).length > 0 ? ` WHERE ${queryObj.where.map(wh => {
-      if(wh.length && typeof wh === 'object') return wh.map(w => w).join(' OR ');
-      return wh;
-    }).join(' AND ')}` : '';
+    let where = this.setWhString(queryObj, ' WHERE ');
 
     return `${update}${set}${where}`;
   }
@@ -264,10 +271,7 @@ module.exports = class JsonQL {
     let del = `DELETE FROM ${db}.${table}`;
 
 
-    let where = (queryObj.where || []).length > 0 ? ` WHERE ${queryObj.where.map(wh => {
-      if(wh.length && typeof wh === 'object') return wh.map(w => w).join(' OR ');
-      return wh;
-    }).join(' AND ')}` : '';
+    let where = this.setWhString(queryObj, ' WHERE ');
 
     return `${del}${where}`;
   }
@@ -295,6 +299,10 @@ module.exports = class JsonQL {
       return this.jQExtract(db, table, col.name);
     }
 
+    if(!this.dbTableColumnValid(db, table, col.name)) {
+      this.errors.push(`${db}.${table}.${col.name} not found in schema`);
+      return null;
+    }
     return `${db}.${table}.${col.name}`;
   }
 
@@ -311,9 +319,11 @@ module.exports = class JsonQL {
       this.errors.push(`No columns included at ${db}.${table}`);
       return '';
     }
-    return queryObj.columns.map(col => {
+    let columns = [];
+    queryObj.columns.forEach(col => {
 
       let name = this.setNameString(db, table, col);
+      if(!name) return;
       // TODO: if you find the `as` logic not working properly
       // the problem could be here. I'm not sure whether to 
       // use col.name here or leave it blank.
@@ -322,10 +332,7 @@ module.exports = class JsonQL {
         as = ` AS ${col.as}`;
       }
 
-      let where = (queryObj.where || []).length > 0 ? ` WHERE ${queryObj.where.map(wh => {
-        if(wh.length && typeof wh === 'object') return wh.map(w => w).join(' OR ');
-        return wh;
-      }).join(' AND ')}` : '';
+      const where = this.setWhString(queryObj, ' WHERE ');
 
       // The parent or the child objects can have a limit but the parent takes priority.
       let limit = queryObj.limit ? 
@@ -336,9 +343,10 @@ module.exports = class JsonQL {
         :
         '';
 
-      return `(SELECT ${name} FROM ${queryObj.name}${where}${limit})${as}`;
+      columns.push(`(SELECT ${name} FROM ${queryObj.name}${where}${limit})${as}`);
 
-    }).join();
+    });
+    return columns.join();
   }
 
   // parseNestedJson=>
@@ -350,22 +358,24 @@ module.exports = class JsonQL {
       return '';
     }
 
-    let where = ` WHERE ${queryObj.where}`;
+    let where = this.setWhString(queryObj, ' WHERE ');
     let limit = '';
 
     if(queryObj.limit) {
       limit = ` LIMIT ${queryObj.limit.map(l => l).join()}`;
     }
 
-    let keyVals = queryObj.columns.map(col => {
+    let keyVals = [];
+    queryObj.columns.forEach(col => {
 
       let name = this.setNameString(db, table, col);
+      if(!name) return;
       let key = col.as ? `'${col.as}'` : `'${col.name}'`;
-      return `${key},${name}`;
+      keyVals.push(`${key},${name}`);
 
-    }).join();
+    });
 
-    return `(SELECT JSON_ARRAYAGG(JSON_OBJECT(${keyVals})) FROM ${db}.${table}${where}${limit})`;
+    return `(SELECT JSON_ARRAYAGG(JSON_OBJECT(${keyVals.join()})) FROM ${db}.${table}${where}${limit})`;
   }
 
   // +~====*************************====~+
@@ -374,6 +384,7 @@ module.exports = class JsonQL {
 
   // funcString=>
   funcString(name) {
+    if(!this.plainStringValid(name)) return;
     const func = name.slice(0, name.indexOf('=>'))
 
     let args = name.slice(
@@ -532,8 +543,10 @@ module.exports = class JsonQL {
 
   // jQExtract=>
   jQExtract(db, table, jQStr) {
+    if(!this.plainStringValid(jQString)) return;
     const regx = /(\$\w+)|(\[\d\])|(\.\w+)|(\[\?[\w\s@#:;{},.!"£$%^&*()/?|`¬\-=+~]*\])/g
     const matches = jQStr.match(regx);
+    if(!this.dbTableColumnValid(db, table, matches[0].slice(1))) return;
     const name = `${db}.${table}.${matches[0].slice(1)}`
     return `JSON_UNQUOTE(JSON_EXTRACT(${name}, ${this.jQStringMaker(name, matches)}))`;
   }
@@ -584,10 +597,34 @@ module.exports = class JsonQL {
   // +~====**'UTILITIES'**====~+
   // +~====***************====~+
 
+  // setWhString=>
+  setWhString(queryObj, type) {
+    let wheres = [];
+    if((queryObj.where || []).length > 0) {
+      queryObj.where.forEach(wh => {
+        if(wh.length && typeof wh === 'object') {
+          let ws = [];
+          wh.forEach(w => !this.whereStringValid(w) || ws.push(w))
+          wheres.push(ws.join(' OR '));
+          return;
+        }
+        if(!this.whereStringValid(wh)) return;
+        wheres.push(wh);
+      });
+    }
+
+    return wheres.length > 0 ? (type || 'WHERE ') + wheres.join(' AND ') : '';
+  }
+
   // splitDbAndTableNames=>
   splitDbAndTableNames(name) {
     const dbTable = /^\w+\.\w+$/
     if(!dbTable.test(name)) {
+      this.errors.push('This name is not allowed: ' + name);
+      this.fatalError = true;
+      return null;
+    } else if(!this.dbTableValid(dbTable)) {
+      this.errors.push('This db and table are not in the schema: ' + name);
       this.fatalError = true;
       return null;
     }
