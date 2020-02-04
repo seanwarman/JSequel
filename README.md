@@ -237,6 +237,19 @@ jSeq.updateSQ({
 }, data);
 ```
 
+### JSON
+JSequel will handle your json objects natively so you can just put them straight into your data
+without having to do any `JSON.stringify` nonsense.
+
+```js
+jSeq.updateSQ({
+  name: 'macDonalds.employees',
+  where: ['_id = "123"']
+}, {
+  jsonForm: { label: 'Name', value: 'Jim', type: 'input' }
+});
+```
+
 ## Schema
 You'll need a schema for your database, this will prevent anyone from injecting dangerous
 SQL into your db without **JSequel** stamping it out.
@@ -427,6 +440,20 @@ This finds an object in an array of objects by searching for the string 'Big Mac
 returns whatever is assigned to the key called `type`.
 
 You can use **jQStrings** wherever you find a `name` parameter.
+
+They are also compatible with the `data` sent to an `updateQL` function.
+Rather than adding the **jQString** as a value, instead it goes in place of the *keyname* of the value you want to update.
+This will only update the `value` param of the first object in the `jsonForm` array to have the string 'Jan'.
+
+```js
+updateQL({
+  db: 'campaigns',
+  table: 'bookings',
+  where: [{name: 'bookingsKey', is: '"123"'}]
+}, {
+  "$jsonForm[0].value": 'Jan'
+});
+```
 
 
 This project is basically a simplified v2 of [JsonQL](https://github.com/seanwarman/jsonQL). If you want
