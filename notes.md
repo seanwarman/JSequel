@@ -458,7 +458,6 @@ doing it all first.
 
 I've done a first pass of the error handling, no testing.
 
-==== MARK 
 The `as` is causing issues again. We can't do nested names more than one level
 deep because jseq uses the whatever's in the `name` for the AS and the 
 AS doesn't accept db.table.
@@ -532,6 +531,7 @@ to be the name of the column we're selecting in the innermost select.
 
 
 
+==== MARK 
 
 If no columns are passed to a selectSQ it should fetch all columns from that
 table that are not hidden.
