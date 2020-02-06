@@ -449,7 +449,6 @@ This works but it doesn't work if you try to set
 a value to a json object. It just sets it as a string.
 
 
-==== MARK 
 
 The error handling is much better in the jsonql, this is because
 all the errors are generated as the query is built which at first seems more
@@ -457,8 +456,85 @@ confusing but it actually makes more sense. Now you have a good idea
 of the structure of jseq add the error handling back in rather than
 doing it all first.
 
+I've done a first pass of the error handling, no testing.
+
+==== MARK 
+The `as` is causing issues again. We can't do nested names more than one level
+deep because jseq uses the whatever's in the `name` for the AS and the 
+AS doesn't accept db.table.
+
+Nested Selects
+
+The nested selects don't work quite like they should.
+
+If I where to do
+
+```js
+columns: [
+  {
+    name: 'bms_campaigns.bookingTemplates', 
+    columns: [
+      {name: 'bookingTmpKey'},
+      {name: 'bookingDivKey'}
+      {
+        name: 'bms_booking.bookingDivisions', 
+        columns: [
+          {name: 'bookingDivName'}
+        ], where: [
+          'bookingDivisions.bookingDivKey = bookingTemplates.bookingDivKey'
+        ]
+      }
+    ], where: [
+      'bookingTemplates.bookingTmpKey = products.bookingTmpKey'
+    ]
+  },
+],
+```
+
+I would expect this result
+```sql
+(
+  SELECT 
+    (
+      SELECT bms_booking.bookingDivisions.bookingDivName 
+      FROM bms_booking.bookingDivisions 
+      WHERE bookingDivisions.bookingDivKey = bookingTemplates.bookingDivKey
+    ) AS bookingDivName  
+  FROM bms_campaigns.bookingTemplates 
+  WHERE bookingTemplates.bookingTmpKey = products.bookingTmpKey 
+) AS bookingDivName
+
+```
+What I actually get is
+
+```sql
+(
+  SELECT 
+    (
+      SELECT bms_booking.bookingDivisions.bookingDivName 
+      FROM bms_booking.bookingDivisions 
+      WHERE bookingDivisions.bookingDivKey = bookingTemplates.bookingDivKey
+    ) AS bookingDivName 
+  FROM bms_campaigns.bookingTemplates 
+  WHERE bookingTemplates.bookingTmpKey = products.bookingTmpKey
+) AS bms_booking.bookingDivisions -- < The AS is wrong.
+```
+
+It's using the `name` of the nested select for the outer `as`
+of the parent select. It needs to use it's own `name` param.
+ 
+No matter how far down the nest goes, we always want the outermost AS
+to be the name of the column we're selecting in the innermost select.
 
 
+
+
+
+
+
+
+If no columns are passed to a selectSQ it should fetch all columns from that
+table that are not hidden.
 
 There's a small bug where if you put a function in a nested select
 the `as` will automatically be set to the original function string syntax...

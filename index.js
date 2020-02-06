@@ -11,6 +11,7 @@ module.exports = class JsonQL {
 
     this.dbTableNames = [];
     this.customFns = {};
+    this.nestedAS = '';
   }
 
   // addCustomFns=>
@@ -24,7 +25,6 @@ module.exports = class JsonQL {
 
   // selectSQ=>
   selectSQ(queryObj) {
-    // this.validateQueryObject(queryObj);
     let query = this.buildSelect(queryObj);
 
     if(this.fatalError) {
@@ -43,8 +43,6 @@ module.exports = class JsonQL {
   }
   // createSQ=>
   createSQ(queryObj, data) {
-    // this.validateQueryObject(queryObj);
-    // data = this.removeDisallowedKeys(queryObj, data);
     let query = this.buildCreate(queryObj, data);
 
     if(this.fatalError) {
@@ -63,8 +61,6 @@ module.exports = class JsonQL {
   }
   // updateSQ=>
   updateSQ(queryObj, data) {
-    // this.validateQueryObject(queryObj);
-    // data = this.removeDisallowedKeys(queryObj, data);
     let query = this.buildUpdate(queryObj, data);
 
     if(this.fatalError) {
@@ -83,7 +79,6 @@ module.exports = class JsonQL {
   }
   // deleteSQ=>
   deleteSQ(queryObj) {
-    // this.validateQueryObject(queryObj);
     let query = this.buildDelete(queryObj);
 
     if(this.fatalError) {
@@ -150,7 +145,7 @@ module.exports = class JsonQL {
         val = this.setValueString(data[key]);
         col = key;
       }
-      if(!this.dbTableColumnValid(db, table, col)) return;
+      if(!this.columnValid(db, table, col)) return;
       if(!this.plainStringValid(val)) return;
       columns.push(col);
       values.push(val);
@@ -299,13 +294,13 @@ module.exports = class JsonQL {
       return this.jQExtract(db, table, col.name);
     }
 
-    if(!this.dbTableColumnValid(db, table, col.name)) {
+    if(!this.columnValid(db, table, col.name)) {
       this.errors.push(`${db}.${table}.${col.name} not found in schema`);
       return null;
     }
+    this.nestedAS = ` AS ${col.name}`;
     return `${db}.${table}.${col.name}`;
   }
-
 
   // +~====*************====~+
   // +~====**'PARSERS'**====~+
@@ -324,10 +319,8 @@ module.exports = class JsonQL {
 
       let name = this.setNameString(db, table, col);
       if(!name) return;
-      // TODO: if you find the `as` logic not working properly
-      // the problem could be here. I'm not sure whether to 
-      // use col.name here or leave it blank.
-      let as = ` AS ${col.name}`;
+
+      let as = this.nestedAS;
       if(col.as) {
         as = ` AS ${col.as}`;
       }
@@ -546,7 +539,7 @@ module.exports = class JsonQL {
     if(!this.plainStringValid(jQString)) return;
     const regx = /(\$\w+)|(\[\d\])|(\.\w+)|(\[\?[\w\s@#:;{},.!"£$%^&*()/?|`¬\-=+~]*\])/g
     const matches = jQStr.match(regx);
-    if(!this.dbTableColumnValid(db, table, matches[0].slice(1))) return;
+    if(!this.columnValid(db, table, matches[0].slice(1))) return;
     const name = `${db}.${table}.${matches[0].slice(1)}`
     return `JSON_UNQUOTE(JSON_EXTRACT(${name}, ${this.jQStringMaker(name, matches)}))`;
   }
@@ -623,7 +616,7 @@ module.exports = class JsonQL {
       this.errors.push('This name is not allowed: ' + name);
       this.fatalError = true;
       return null;
-    } else if(!this.dbTableValid(dbTable)) {
+    } else if(!this.dbTableValid(name)) {
       this.errors.push('This db and table are not in the schema: ' + name);
       this.fatalError = true;
       return null;
@@ -637,100 +630,6 @@ module.exports = class JsonQL {
   // +~====****************====~+
   // +~====**'VALIDATION'**====~+
   // +~====****************====~+
-
-  // removeDisallowedKeys=>
-  removeDisallowedKeys(queryObj, data) {
-    const {db,table} = this.splitDbAndTableNames(queryObj.name);
-    if(!(this.schema[db] || {})[table]) {
-      this.fatalError = true;
-      this.errors.push(`${db}.${table} is not in the schema`);
-      return;
-    }
-
-    let newData = {};
-
-    Object.keys(data).forEach(key => {
-      if(!this.schema[db][table][key]) {
-        this.errors.push(`${db}.${table}.${key} is not in the schema`);
-        this.fatalError = true;
-        return;
-      } else {
-        newData[key] = data[key];
-      }
-    });
-
-    return newData;
-
-  }
-
-  // validateQueryObject=>
-  validateQueryObject(queryObj) {
-    if(/^\w+\=\>/.test(queryObj.name)) {
-      return true;
-    }
-
-    const {db,table} = this.splitDbAndTableNames(queryObj.name);
-    this.dbTableNames.push({db, table});
-
-    if(!(this.schema[db] || {})[table]) {
-      this.fatalError = true;
-      this.errors.push(`${db}.${table} is not in the schema`);
-      return;
-    }
-    // We have to check the where first so it'll still have the relevent db and table names
-    if(queryObj.where) {
-      // Now to validate the where strings
-      queryObj.where = queryObj.where.filter(wh => {
-        if(this.whereStringValid(wh)) return true;
-        return false;
-      });
-    }
-
-    // Remove all invalid columns from the queryObject.
-    queryObj.columns = (queryObj.columns || []).filter(col => {
-      const twoSelections = /^\w+\.\w+$/;
-      if(twoSelections.test(col.name) && this.dbTableValid(col.name)) {
-        // Now check the nested object.
-        this.validateQueryObject(col);
-        return true;
-      }
-      if(col.as) {
-        return this.nameStringValid(db, table, col.name) && this.plainStringValid(col.as);
-      }
-      return this.nameStringValid(db, table, col.name)
-    });
-
-    return queryObj;
-  }
-
-  // nameStringValid=>
-  nameStringValid(db, table, name) {
-    const dbTableColumn = /^\w+\.\w+\.\w+$/;
-    const tableColumn = /^\w+\.\w+$/;
-    const column = /^\w+$/;
-    const string = /^['"`].+['"`]$/g;
-    const func = /^\w+\=\>/;
-    const all = /\*/g;
-    const jQString = /^\$\w+/;
-
-    if(typeof name === 'number') return true;
-
-    if(jQString.test(name) && this.jQStringValid(db, table, name)) return true;
-    if(all.test(name)) return true;
-    if(func.test(name) && this.funcValid(db, table, name)) return true;
-    if(string.test(name) && this.plainStringValid(name)) return true;
-    if(dbTableColumn.test(name) && this.dbTableColumnValid(name)) return true;
-    if(tableColumn.test(name) && this.tableColumnValid(db, name)) return true;
-    if(column.test(name) && this.columnValid(db, table, name)) return true;
-    return false;
-  }
-
-  // jQStringValid=>
-  jQStringValid(db, table, jQString) {
-    const column = jQString.slice(1, jQString.search(/[\.\[]/));
-    if(!this.columnValid(db, table, column)) return false;
-    return true;
-  }
 
   // whereStringValid=>
   whereStringValid(whStr) {
@@ -772,25 +671,6 @@ module.exports = class JsonQL {
     return valid;
   }
 
-  // funcValid=>
-  funcValid(db, table, name) {
-    const func = name.slice(0, name.indexOf('=>'))
-    let valid = false;
-    // const columns = name.slice(func.length + 2).match(/\w+\=\>|[\(\)]|[`"'](.*?)[`"']|\$*(\w+\.)+\w+|\$*\w+|\\|\/|\+|>=|<=|=>|>|<|-|\*|=/g);
-    // I've removed the () check from this regex because it was knocking a function with no args from the query.
-    const columns = name.slice(func.length + 2).match(/\w+\=\>|[`"'](.*?)[`"']|\$*(\w+\.)+\w+|\$*\w+|\\|\/|\+|>=|<=|=>|>|<|-|\*|=/g);
-    // No arguments return true.
-    if(!columns) {
-      return true; 
-    }
-    columns.forEach(nm => {
-      if(this.nameStringValid(db, table, nm)){
-        valid = true;
-      }
-    });
-    return valid;
-  }
-
   // plainStringValid=>
   plainStringValid(string) {
     const regex = /(drop )|;|(update )|( truncate)/gi;
@@ -821,7 +701,7 @@ module.exports = class JsonQL {
   dbTableColumnValid(string, pushToErrors = true) {
     let m = string.match(/\w+/g);
     if(!((this.schema[m[0]] || {})[m[1]] || {})[m[2]]) {
-      if(pushToErrors) this.errors.push(`${m[0]} ${m[1]} ${m[2]} db, table or column not found in schema`);
+      if(pushToErrors) this.errors.push(`${m[0]} ${m[1]} ${m[2]} not found in schema`);
       return false
     }
     return true;
