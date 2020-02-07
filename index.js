@@ -102,6 +102,7 @@ module.exports = class JsonQL {
 
   // setValueString=>
   setValueString(value) {
+    if(!value) return;
     if(typeof value === 'object' && value.forEach) {
       return `JSON_ARRAY(${value.map(val => this.setValueString(val)).join()})`;
     }
@@ -118,6 +119,7 @@ module.exports = class JsonQL {
 
   // setJQString=>
   setJQString(db, table, key, value) {
+    if(!value) return;
     let column = this.extractColFromJQString(db, table, key);
     column = `${db}.${table}.${column}`;
 
@@ -139,12 +141,14 @@ module.exports = class JsonQL {
       let val;
       if(/^\$/.test(key)) {
         let jqObj = this.setJQString(db,table,key,this.setValueString(data[key]));
+        if(!jqObj) return;
         col = jqObj.column;
         val = jqObj.value;
       } else {
         val = this.setValueString(data[key]);
         col = key;
       }
+      if(!val) return;
       if(!this.columnValid(db, table, col)) return;
       if(!this.plainStringValid(val)) return;
       columns.push(col);
