@@ -533,6 +533,12 @@ to be the name of the column we're selecting in the innermost select.
 
 ==== MARK 
 
+There's a bug with posting, if any field is undefined it breaks createSQ
+
+
+
+
+
 If no columns are passed to a selectSQ it should fetch all columns from that
 table that are not hidden.
 
