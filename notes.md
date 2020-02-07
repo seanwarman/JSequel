@@ -525,20 +525,10 @@ of the parent select. It needs to use it's own `name` param.
 No matter how far down the nest goes, we always want the outermost AS
 to be the name of the column we're selecting in the innermost select.
 
-
-
-
-
-
-
-==== MARK 
-
 There's a bug with posting, if any field is undefined it breaks createSQ
 
 
-
-
-
+==== MARK 
 If no columns are passed to a selectSQ it should fetch all columns from that
 table that are not hidden.
 
