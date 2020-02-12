@@ -102,7 +102,7 @@ module.exports = class JsonQL {
 
   // setValueString=>
   setValueString(value) {
-    if(!value) return;
+    if(!value) return null;
     if(typeof value === 'object' && value.forEach) {
       return `JSON_ARRAY(${value.map(val => this.setValueString(val)).join()})`;
     }
@@ -113,7 +113,7 @@ module.exports = class JsonQL {
       return `${value}`;
     }
     if(typeof value === 'string') {
-      return `"${value}"`;
+      return `'${value}'`;
     }
   }
 
@@ -146,6 +146,7 @@ module.exports = class JsonQL {
         val = jqObj.value;
       } else {
         val = this.setValueString(data[key]);
+        console.log('val :', val);
         col = key;
       }
       if(!val) return;
