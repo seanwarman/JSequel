@@ -529,8 +529,6 @@ There's a bug with posting, if any field is undefined it breaks createSQ
 
 
 ==== MARK 
-If no columns are passed to a selectSQ it should fetch all columns from that
-table that are not hidden.
 
 There's a small bug where if you put a function in a nested select
 the `as` will automatically be set to the original function string syntax...

@@ -164,6 +164,7 @@ module.exports = class JsonQL {
 
   // buildSelect=>
   buildSelect(queryObj) {
+    // If the `name` has a custom function return that first.
     if(/^\w+\=\>/.test(queryObj.name)) {
       return this.funcString(queryObj.name)
     }
@@ -196,13 +197,18 @@ module.exports = class JsonQL {
     // The outer parent object finds using a HAVING but the nested one's use WHERE.
     let where = this.setWhString(queryObj, ' HAVING ');
 
+    let sort = '';
+    if(queryObj.sort && this.splitStringValidation(queryObj.sort)) {
+      sort = ` ORDER BY ${queryObj.sort}`;
+    }
+
     let limit = queryObj.limit ? ` LIMIT ${queryObj.limit.map(n => n).join()}` : '';
 
     let as = '';
     if(queryObj.as) {
       as += ` AS ${queryObj.as}`;
     }
-    return `(${select}${from}${where}${limit})${as}`;
+    return `(${select}${from}${where}${sort}${limit})${as}`;
   }
 
   // +~====************====~+
@@ -332,6 +338,11 @@ module.exports = class JsonQL {
 
       const where = this.setWhString(queryObj, ' WHERE ');
 
+      let sort = '';
+      if(queryObj.sort && this.splitStringValidation(queryObj.sort)) {
+        sort = ` ORDER BY ${queryObj.sort}`;
+      }
+
       // The parent or the child objects can have a limit but the parent takes priority.
       let limit = queryObj.limit ? 
         ` LIMIT ${queryObj.limit.map(n => n).join()}` 
@@ -341,7 +352,7 @@ module.exports = class JsonQL {
         :
         '';
 
-      columns.push(`(SELECT ${name} FROM ${queryObj.name}${where}${limit})${as}`);
+      columns.push(`(SELECT ${name} FROM ${queryObj.name}${where}${sort}${limit})${as}`);
 
     });
     return columns.join();
@@ -357,8 +368,13 @@ module.exports = class JsonQL {
     }
 
     let where = this.setWhString(queryObj, ' WHERE ');
-    let limit = '';
 
+    let sort = '';
+    if(queryObj.sort && this.splitStringValidation(queryObj.sort)) {
+      sort = ` ORDER BY ${queryObj.sort}`;
+    }
+
+    let limit = '';
     if(queryObj.limit) {
       limit = ` LIMIT ${queryObj.limit.map(l => l).join()}`;
     }
@@ -373,7 +389,7 @@ module.exports = class JsonQL {
 
     });
 
-    return `(SELECT JSON_ARRAYAGG(JSON_OBJECT(${keyVals.join()})) FROM ${db}.${table}${where}${limit})`;
+    return `(SELECT JSON_ARRAYAGG(JSON_OBJECT(${keyVals.join()})) FROM ${db}.${table}${where}${sort}${limit})`;
   }
 
   // +~====*************************====~+
@@ -602,11 +618,11 @@ module.exports = class JsonQL {
       queryObj.where.forEach(wh => {
         if(wh.length && typeof wh === 'object') {
           let ws = [];
-          wh.forEach(w => !this.whereStringValid(w) || ws.push(w))
+          wh.forEach(w => !this.splitStringValidation(w) || ws.push(w))
           wheres.push(ws.join(' OR '));
           return;
         }
-        if(!this.whereStringValid(wh)) return;
+        if(!this.splitStringValidation(wh)) return;
         wheres.push(wh);
       });
     }
@@ -636,8 +652,8 @@ module.exports = class JsonQL {
   // +~====**'VALIDATION'**====~+
   // +~====****************====~+
 
-  // whereStringValid=>
-  whereStringValid(whStr) {
+  // splitStringValidation=>
+  splitStringValidation(whStr) {
     const parts = whStr.split(' ');
     // const parts = whStr.match(/[\$\w.]+|['`"].+['`"]|\\|\+|>=|<=|=>|>|<|-|\*|=/g);
     let valid = false;

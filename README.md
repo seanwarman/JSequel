@@ -5,6 +5,7 @@ stack.
 
 All **JSequel** does is make mysql query strings so it's also fast.
 
+### Select
 It allows you to build your database query in the frontend like...
 
 ```js
@@ -69,8 +70,44 @@ where: [
 ]
 ```
 
+### Limit and Sort
+Add a `limit` array and `sort` string to the object.
+
+```js
+{
+  name: 'macDonalds.employees',
+  columns: [
+    {name: 'firstName'},
+    {name: 'lastName'},
+    {name: 'age'}
+  ],
+  limit: [0, 10],
+  sort: 'lastName'
+}
+```
+
+Add 'desc' to the `sort` string to reverse the sorting order.
+```js
+sort: 'lastName desc'
+```
+
 ### Joins
-JOINs can be added as part of the `columns` array...
+Jsequel's API is very simple because every `Object` in a query is exactly the same.
+Here are all the possible keys in a Jsequel object.
+
+```js
+{
+  name: String,
+  columns: [Object],
+  where: [String],
+  limit: [Number,Number],
+  sort: String
+}
+```
+
+The `columns` array is normally used to select which table columns you want to return
+using the `name` param but if you add another `columns` and a `where` to it you can make
+a join to another table.
 
 ```js
 {
@@ -86,60 +123,8 @@ JOINs can be added as part of the `columns` array...
       ],
       where: ['meals.mealKey = customers.favouriteMealKey']
     }
-  ]
-}
-```
-
-Which is the same as...
-
-```sql
-SELECT
-macDonalds.customers.firstName,
-macDonalds.customers.lastName,
-macDonalds.meals.title,
-macDonalds.meals.price
-
-FROM
-macDonalds.customers
-
-LEFT JOIN macDonalds.meals ON meals.mealKey = customers.favouriteMealKey
-```
-
-
-### MongoDB-like associations
-Add an `as` to a nested column and JSequel will return those records inside an array.
-
-So rather than starting with the `customer` to find their favourite meal you can start
-with the meal and list every customer who has that meal as their favourite.
-```js
-{
-  name: 'macDonalds.meals',
-  columns: [
-    {name: 'title'},
-    {
-      name: 'macDonalds.customers',
-      columns: [
-        {name: 'firstName'},
-        {name: 'lastName'}
-      ],
-      where: ['meals.mealKey = customers.favouriteMealKey'],
-      as: 'customersWhoLike' // <<
-    }
   ],
-  where: ['title = "Big Mac"']
-}
-```
-
-This is very un-mysqlish but really useful for modern web apps.
-```js
-// Result...
-{
-  title: 'Big Mac',
-  customersWhoLike: [
-    {firstName: 'bill', lastName: 'ray'},
-    {firstName: 'gemma', lastName: 'stonebridge'},
-    // ...etc
-  ]
+  where: ['customers.firstName = "Bill"']
 }
 ```
 
@@ -237,20 +222,7 @@ jSeq.updateSQ({
 }, data);
 ```
 
-### JSON
-JSequel will handle your json objects natively so you can just put them straight into your data
-without having to do any `JSON.stringify` nonsense.
-
-```js
-jSeq.updateSQ({
-  name: 'macDonalds.employees',
-  where: ['_id = "123"']
-}, {
-  jsonForm: { label: 'Name', value: 'Jim', type: 'input' }
-});
-```
-
-## Schema
+# Schema
 You'll need a schema for your database, this will prevent anyone from injecting dangerous
 SQL into your db without **JSequel** stamping it out.
 
@@ -280,7 +252,7 @@ module.exports = {
 ```
 Any columns not included in the schema will be automatically omitted from your queries.
 
-## Functions
+# Functions
 You can use any of MYSQLs in-built functions by adding the function name to any `name` param.
 
 ```js
@@ -311,11 +283,7 @@ name: 'concat=>("Todays date: " date=>())'
 All function names must be preceeded by `=>()`. All arguments are 
 seperated by a single space unless inside a " string ".
 
-Functions can be used in any `name` param accept for the top level database.table
-`name` and in nested json selections, but that is a TODO on my list.
-
 # Custom Functions
-
 Add custom functions using `addCustomFns` in your node controller
 to make any kind of custom selection.
 
@@ -385,24 +353,15 @@ All json query strings must start with a `$`, after that they're the same as jav
 
 Say you had a json column with an array of objects.
 
-```js
-//____________________________
-//mealTypes                  |
-//----------------------------
-[
-  {
-    type: 'burger',
-    name: 'Big Mac'
-  },
-  {
-    type: 'chicken',
-    name: 'Chicken Zinger'
-  },
-  {
-    type: 'sandwich',
-    name: 'The Chopper'
-  }
-]
+```sql
+________________________________
+| mealTypes                    |
+--------------------------------
+| type       | name            |
+|------------------------------|
+| burger     | Big Mac         |
+| chicken    | Chicken Zinger  |
+| sandwich   | The Chopper     |
 ```
 
 ```js
@@ -454,6 +413,20 @@ updateQL({
   "$jsonForm[0].value": 'Jan'
 });
 ```
+
+### JSON
+JSequel will handle your json objects natively so you can just put them straight into your data
+without having to do any `JSON.stringify` nonsense.
+
+```js
+jSeq.updateSQ({
+  name: 'macDonalds.employees',
+  where: ['_id = "123"']
+}, {
+  jsonForm: { label: 'Name', value: 'Jim', type: 'input' }
+});
+```
+
 This project is basically a simplified v2 of [JsonQL](https://github.com/seanwarman/jsonQL). If you want
 an idea of the roadmap for **JSequel** you can check out that project.
 
@@ -493,3 +466,46 @@ const queryObj = decodeURIComponent(JSON.stringify({
 
 const employees = await axios.get(`/jseq/${queryObj}`);
 ```
+
+### MongoDB-like associations
+Add an `as` to a nested column and JSequel will return those records inside an array.
+
+So rather than starting with the `customer` to find their favourite meal you can start
+with the meal and list every customer who has that meal as their favourite.
+```js
+{
+  name: 'macDonalds.meals',
+  columns: [
+    {name: 'title'},
+    {
+      name: 'macDonalds.customers',
+      columns: [
+        {name: 'firstName'},
+        {name: 'lastName'}
+      ],
+      where: ['meals.mealKey = customers.favouriteMealKey'],
+      as: 'customersWhoLike' // <<
+    }
+  ],
+  where: ['title = "Big Mac"']
+}
+```
+
+This is very un-mysqlish but really useful for modern web apps.
+```js
+// Result...
+{
+  title: 'Big Mac',
+  customersWhoLike: [
+    {firstName: 'bill', lastName: 'ray'},
+    {firstName: 'gemma', lastName: 'stonebridge'},
+    // ...etc
+  ]
+}
+```
+
+**Note**: You cannot currently `limit` or `sort` nested jsons due to limitations
+in mysql. Also note that any version before mysql 8.0 will replace duplicate keys
+giving priority to the *first* key name it finds, unlike javascript.
+See [here](https://dev.mysql.com/doc/refman/5.7/en/json.html#json-normalization)
+for reference.
