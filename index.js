@@ -109,6 +109,9 @@ module.exports = class JsonQL {
     if(typeof value === 'object' && !value.forEach) {
       return `JSON_OBJECT(${Object.keys(value).map(key => `${this.setValueString(key)}, ${this.setValueString(value[key])}`).join()})`;
     }
+    if(typeof value === 'boolean') {
+      return `${value}`;
+    }
     if(typeof value === 'number') {
       return `${value}`;
     }
@@ -146,12 +149,10 @@ module.exports = class JsonQL {
         val = jqObj.value;
       } else {
         val = this.setValueString(data[key]);
-        console.log('val :', val);
         col = key;
       }
       if(!val) return;
       if(!this.columnValid(db, table, col)) return;
-      if(!this.plainStringValid(val)) return;
       columns.push(col);
       values.push(val);
     });
