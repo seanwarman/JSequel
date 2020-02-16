@@ -351,14 +351,24 @@ All json query strings must start with a `$`, after that they're the same as jav
 Say you had a json column with an array of objects.
 
 ```sql
-________________________________
-| mealTypes                    |
---------------------------------
-| type       | name            |
-|------------------------------|
-| burger     | Big Mac         |
-| chicken    | Chicken Zinger  |
-| sandwich   | The Chopper     |
+_____________________________
+| mealTypes                 |
+-----------------------------
+|[                          |
+| {                         |
+|    type: 'burger',        |
+|    name: 'Big Mac'        |  
+| },                        |
+| {                         |
+|   type: 'chicken',        | 
+|   name: 'Chicken Zinger'  |
+| },                        |
+| {                         |
+|   type: 'sandwich',       |
+|   name: 'The Chopper'     |
+| },                        |
+|]                          |
+|                           |
 ```
 
 ```js
