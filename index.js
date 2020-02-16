@@ -432,7 +432,7 @@ module.exports = class JsonQL {
     // I'm doing toUpperCase here just to denote it's definitely a mysql function.
     let str = '';
     if(this.customFns[func]) {
-      str = this.customFns[func](newArgs);
+      str = this.customFns[func](...newArgs);
     } else {
       str = `${func.toUpperCase()}(${newArgs.join()})`;
     }
@@ -508,7 +508,7 @@ module.exports = class JsonQL {
 
         if(/\w+\=\>/.test(arg) && i === start-2) {
           arg = arg.slice(0, -2);
-          if(this.customFns[arg]) return [...arr, this.customFns[arg](newArgs.slice(start, end))];
+          if(this.customFns[arg]) return [...arr, this.customFns[arg](...newArgs.slice(start, end))];
           return [...arr, arg.toUpperCase() + '(' + newArgs.slice(start, end).join() + ')'];
         }
 
@@ -531,7 +531,7 @@ module.exports = class JsonQL {
 
         if(/\w+\=\>/.test(arg) && i === start-2) {
           arg = arg.slice(0, -2);
-          if(this.customFns[arg]) return [...arr, this.customFns[arg](newArgs.slice(start, end))];
+          if(this.customFns[arg]) return [...arr, this.customFns[arg](...newArgs.slice(start, end))];
           return [...arr, arg.toUpperCase() + '(' + newArgs.slice(start, end).join() + ')'];
         }
 

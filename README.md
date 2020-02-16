@@ -304,6 +304,8 @@ let jqueryObj = jseq.selectQL({
 });
 ```
 
+A custom function must always return a string.
+
 You can also add arguments to custom functions...
 
 ```js
@@ -341,11 +343,6 @@ let jqueryObj = jseq.selectQL({
   name: 'unionRecords=>(macDonalds.orders macDonalds.meals)'
 });
 ```
-
-A custom function must always return a string. You can't nest 
-custom functions inside one another but you can send 
-mysql functions to them as string arguments, which will then
-be interpreted in your query.
 
 # JQString (Json Query Strings)
 For tables with json type fields you can use a json query string to select specific values in an array.
