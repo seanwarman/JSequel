@@ -227,6 +227,14 @@ module.exports = class JsonQL {
     let insert = `INSERT INTO ${db}.${table}`;
 
     let {columns, values} = this.parseData(db, table, data);
+    if(values.length === 0) {
+      this.fatalError = true
+      this.errors.push('There must be at least one value when creating a record.')
+    }
+    if(columns.length === 0) {
+      this.fatalError = true
+      this.errors.push('There must be at least one column when creating a record.')
+    }
     let set = ` (${columns.map(c => c).join()}) VALUES (${values.map(v => v).join()})`;
     return `${insert}${set}`;
   }
@@ -246,6 +254,14 @@ module.exports = class JsonQL {
     let update = `UPDATE ${db}.${table}`;
 
     let {columns, values} = this.parseData(db, table, data);
+    if(values.length === 0) {
+      this.fatalError = true
+      this.errors.push('There must be at least one value when creating a record.')
+    }
+    if(columns.length === 0) {
+      this.fatalError = true
+      this.errors.push('There must be at least one column when creating a record.')
+    }
     let set = ` SET ${columns.map(( key, i ) => `${key} = ${values[i]}`).join()}`;
 
     if((queryObj.where || []).length === 0 || !queryObj.where) {
