@@ -124,7 +124,6 @@ module.exports = class JsonQL {
   setJQString(db, table, key, value) {
     if(!value) return;
     let column = this.extractColFromJQString(db, table, key);
-    column = `${db}.${table}.${column}`;
 
     value = `IF(
       ${this.jQSet(db, table, key, value)} IS NOT NULL,
