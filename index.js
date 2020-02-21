@@ -115,6 +115,9 @@ module.exports = class JsonQL {
     if(typeof value === 'number') {
       return `${value}`;
     }
+    if(typeof value === 'string' && value === 'NULL') {
+      return `NULL`;
+    }
     if(typeof value === 'string') {
       return `'${value}'`;
     }
