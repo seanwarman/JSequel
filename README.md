@@ -222,6 +222,8 @@ jSeq.updateSQ({
 }, data);
 ```
 
+**Note**: To update a record with a NULL value assign the string 'NULL' to it.
+
 # Schema
 You'll need a schema for your database, this will prevent anyone from injecting dangerous
 SQL into your db without **JSequel** stamping it out.
