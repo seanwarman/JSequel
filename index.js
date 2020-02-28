@@ -576,7 +576,7 @@ module.exports = class JsonQL {
 
   // jQExtract=>
   jQExtract(db, table, jQStr) {
-    if(!this.plainStringValid(jQString)) return;
+    if(!this.plainStringValid(jQStr)) return;
     const regx = /(\$\w+)|(\[\d\])|(\.\w+)|(\[\?[\w\s@#:;{},.!"£$%^&*()/?|`¬\-=+~]*\])/g
     const matches = jQStr.match(regx);
     if(!this.columnValid(db, table, matches[0].slice(1))) return;
