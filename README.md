@@ -513,6 +513,60 @@ This is very un-mysqlish but really useful for modern web apps.
 }
 ```
 
+When using nested jsons you must stick to more mongo-like results. So rather than 
+doing mysql joins and having data from associate tables included in your results
+you'll have to instead further nest the results of associated tables.
+
+If I wanted to get data from another record into my already nested json result, I 
+should expect those results to be in an array under a keyname that I specify with an
+`as`.
+
+```js
+{
+  name: 'macDonalds.meals',
+  columns: [
+    {name: 'title'},
+    {
+      name: 'macDonalds.customers',
+      columns: [
+        {name: 'firstName'},
+        {name: 'lastName'},
+        {
+          name: 'macDonalds.emails',
+          columns: [
+            {name: 'emailAddress'}
+          ],
+          where: ['customers.emailKey = emails.emailKey'],
+          as: 'email' // << Another as must be added for this to work
+        }
+      ],
+      where: ['meals.mealKey = customers.favouriteMealKey'],
+      as: 'customersWhoLike'
+    }
+  ],
+  where: ['title = "Big Mac"']
+}
+```
+
+The results will look like this with the `emailAddress` nested inside an `email` array.
+
+```js
+{
+  title: 'Big Mac',
+  customersWhoLike: [
+    {
+      firstName: 'bill', 
+      lastName: 'ray',
+      email: [
+        { emailAddress: 'bill.ray@nicetown.com' }
+      ]
+    },
+    // ...etc
+  ]
+}
+```
+
+
 **Note**: You cannot currently `limit` or `sort` nested jsons due to limitations
 in mysql. Also note that any version before mysql 8.0 will replace duplicate keys
 giving priority to the *first* key name it finds, unlike javascript.
