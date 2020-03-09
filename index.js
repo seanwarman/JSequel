@@ -12,6 +12,7 @@ module.exports = class JsonQL {
     this.dbTableNames = [];
     this.customFns = {};
     this.nestedAS = '';
+    this.nestedAsNames = []
   }
 
   // addCustomFns=>
@@ -177,6 +178,13 @@ module.exports = class JsonQL {
     // The treeMap is an array of indexes showing us where everything
     // is in queryObj, we want to make another array to build our
     // select string with.
+
+    // TODO:
+    // The way this is built it can only ever get a single record because
+    // every query is a nested select.
+    //
+    // We need to get all the top level selections, create a query out of them
+    // then nest the rest of the queries inside.
     const selectMap = treeMap.map(tree => {
 
       return this.createSelectMapFromTree([queryObj], tree)
@@ -186,32 +194,42 @@ module.exports = class JsonQL {
       // can return any errors properly.
     }).filter(sel => sel !== null)
 
-    console.log('selectMap :', selectMap);
-
     // Now to build another array of selections each with a single target
     // column.
-    const select = selectMap.map(sel => sel.map(col => {
-      let {
-        db,
-        table,
-        name,
-        as,
-        sort,
-        limit,
-        where
-      } = this.splitSelectItems(col, col.dbTable)
+    const select = selectMap.map(( cols, i ) => {
+      return this.createSelectStringFromCols(cols)
 
-      if(limit.length > 0) limit = ` LIMIT ${limit.join()}`
-      if(where.length > 0) where = ` WHERE ${where.join(' AND ')}`
-      if(sort.length > 0) sort = ` SORT ${sort}`
-      if(as.length > 0) as = ` AS ${as}`
+    })
 
-      return `(SELECT ${name} FROM ${db}.${table}${where}${sort}${limit})${as}`
+    return `SELECT ${select.map((sel,i) => `${sel}${this.nestedAsNames[i]}`).join()}`
 
-    }))
+  }
 
-    console.log('select :', select);
+  createSelectStringFromCols(cols, index = 0) {
+    const col = cols[index]
+    let {
+      db,
+      table,
+      name,
+      as,
+      sort,
+      limit,
+      where
+    } = this.splitSelectItems(col, col.dbTable)
 
+    if(limit.length > 0) limit = ` LIMIT ${limit.join()}`
+    if(where.length > 0) where = ` WHERE ${where.join(' AND ')}`
+    if(sort.length > 0) sort = ` SORT ${sort}`
+    if(as.length > 0) as = ` AS ${as}`
+    else if(name.length > 0) as = ` AS ${name}`
+
+
+    if(name.length > 0) {
+      this.nestedAsNames.push(as)
+      return `(SELECT ${name} FROM ${db}.${table}${where}${sort}${limit})`
+    } else {
+      return `(SELECT ${this.createSelectStringFromCols(cols, index+1)} FROM ${db}.${table}${where}${sort}${limit})`
+    }
 
   }
 
@@ -416,18 +434,28 @@ module.exports = class JsonQL {
 
     // Has => so it's a function string
     if(/^\w+\=\>/.test(col.name)) {
+      if(!col.as) {
+        this.errors.push('There must be an "as" value for every function selection: ', col.name)
+        this.fatalError = true
+        return null
+      }
       return { name: this.funcString(col.name), as }
     }
 
     // Has `$` at the start so it's a jQ string
     if(/^\$\w+/.test(col.name)) {
+      if(!col.as) {
+        this.errors.push('There must be an "as" value for every jQString selection: ', col.name)
+        this.fatalError = true
+        return null
+      }
       return { name: this.jQExtract(db, table, col.name), as }
     }
 
     // Has name.name so it's a dbName selection
     if(/^\w+\.\w+$/g.test(col.name) && !col.as) {
       if(!col.where) {
-        this.errors.push('There must be a where item for every db.table selection: ', col.name)
+        this.errors.push('There must be a "where" value for every db.table selection: ', col.name)
         this.fatalError = true
         return null
       }
@@ -451,21 +479,10 @@ module.exports = class JsonQL {
       return { name: col.name, as }
     }
 
-    this.errors.push('Column didn\'t meet the requirements for a selection: ', col)
+    this.errors.push('Column didn\'t meet the requirements for a selection: ', JSON.stringify(col))
     this.fatalError = true
     return null
 
-
-    // Check to see if the column name is valid, we'll do this one
-    // level up now because we'll have the dbName and name to check the
-    // schema properly.
-    // if(!this.columnValid(db, table, col.name)) {
-    //   this.errors.push(`${db}.${table}.${col.name} not found in schema`);
-    //   return null;
-    // }
-
-    // this.nestedAS = ` AS ${col.name}`;
-    // return `${db}.${table}.${col.name}`;
   }
 
   // +~====*************====~+
