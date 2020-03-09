@@ -9,7 +9,7 @@ module.exports = class JsonQL {
     this.from = '';
     this.where = '';
 
-    this.dbTableNames = [];
+    this.masterDbTable = ''
     this.customFns = {};
     this.nestedAS = '';
     this.nestedAsNames = []
@@ -26,7 +26,7 @@ module.exports = class JsonQL {
 
   // selectSQ=>
   selectSQ(queryObj) {
-    const treeMap = this.buildTreeMap([queryObj])
+    const treeMap = this.buildTreeMap(queryObj.columns)
     let query = this.buildSelect(queryObj, treeMap);
 
     if(this.fatalError) {
@@ -174,53 +174,6 @@ module.exports = class JsonQL {
       return this.funcString(queryObj.name)
     }
 
-
-    // The treeMap is an array of indexes showing us where everything
-    // is in queryObj, we want to make another array to build our
-    // select string with.
-
-    console.log('treeMap :', treeMap)
-
-    const selectMap = treeMap.map(tree => {
-
-      return this.createSelectMapFromTree([queryObj], tree)
-
-      // Errored names will return null so filter them
-      // out so the whole thing doesn't break and we
-      // can return any errors properly.
-    }).filter(sel => sel !== null)
-
-    console.log('selectMap :', selectMap)
-
-    // TODO:
-    // The way this is built it can only ever get a single record because
-    // every query is a nested select.
-    //
-    // We need to get all the top level selections, create a query out of them
-    // then nest the rest of the queries inside.
-    //
-    // If the selectMap item is length 1 it means it's a top level select.
-    //
-    // selectMap.forEach(item => console.log(item.length))
-
-
-
-
-    // Now to build another array of selections each with a single target
-    // column.
-    const select = selectMap.map(( cols, i ) => {
-      const str = `${this.createSelectStringFromCols(cols)}${this.nestedAsNames[i]}`
-      return str
-
-    })
-
-    console.log('select :', select)
-
-
-  }
-
-  createSelectStringFromCols(cols, index = 0) {
-    const col = cols[index]
     let {
       db,
       table,
@@ -229,21 +182,75 @@ module.exports = class JsonQL {
       sort,
       limit,
       where
-    } = this.splitSelectItems(col, col.dbTable)
+    } = this.splitSelectItems(queryObj, queryObj.name)
+
+    // This comes in handy.
+    this.masterDbTable = `${db}.${table}`
 
     if(limit.length > 0) limit = ` LIMIT ${limit.join()}`
     if(where.length > 0) where = ` WHERE ${where.join(' AND ')}`
     if(sort.length > 0) sort = ` SORT ${sort}`
-    if(as.length > 0) as = ` AS ${as}`
-    else if(name.length > 0) as = ` AS ${name}`
 
 
-    if(name.length > 0) {
-      this.nestedAsNames.push(as)
-      return `(SELECT ${name} FROM ${db}.${table}${where}${sort}${limit})`
-    } else {
-      return `${this.createSelectStringFromCols(cols, index+1)}`
+    // treeMap is an array of indexes showing us where everything
+    // is in queryObj.columns.
+
+    const columns = treeMap.map((tree, i) => {
+
+      // We want to make an array of all the different column selections for
+      // our query. SQL will only let you select a single column in a nested
+      // query so we have to start at the top and work our way down for each one.
+      return `${this.buildColumnsFromTree(queryObj.columns, tree)}${this.nestedAsNames[i]}`
+
+    })
+
+
+    // Finally put all the columns into a master selection and return the result.
+    return `SELECT ${columns.join()} FROM ${db}.${table}${where}${sort}${limit}`
+
+
+
+  }
+
+  // buildColumnsFromTree=>
+  buildColumnsFromTree(columns, tree, index = 0, prevDbTable = this.masterDbTable) {
+
+    const col = columns[tree[index]]
+
+    let name = ''
+    if(col.name) name = col.name
+
+    let as = ''
+    if(col.as) as = ` AS ${col.as}`
+
+    let sort = ''
+    if(col.sort) sort = ` SORT ${col.sort}`
+
+    let limit = ''
+    if(col.limit) limit = ` LIMIT ${col.limit.join()}`
+
+    let where = ''
+    if(col.where) where = ` WHERE ${col.where.join(' AND ')}`
+
+    // If we're at the last tree return the name and add an as to the
+    // top level
+    if(tree[index+1] === undefined) {
+
+
+      // We often need the as name at the top level, outside of the nested
+      // selects so we store it here. If there's no as in the cols object
+      // we still want it otherwise mysql will give us the long selection
+      // as a key name in our result.
+      this.nestedAsNames.push(as.length > 0 ? as : ` AS ${name}`)
+
+      // At the final step the nameRouter function converts any fancy names 
+      // into a boring old sql string.
+      return this.nameRouter(col, prevDbTable)
     }
+
+
+    // The other option is we keep digging...
+    return `(SELECT ${this.buildColumnsFromTree(col.columns, tree, index+1, col.name)} FROM ${name}${where}${limit}${sort})`
 
   }
 
@@ -419,39 +426,35 @@ module.exports = class JsonQL {
     }
   }
 
-  // createSelectMapFromTree=>
-  createSelectMapFromTree(columns, tree, index = 0, items = []) {
-
-    const colIndex = tree[index]
-
-    // We might need the dbTable value of the last item 
-    // so we can check the schema inside nameRouter
-    const prevDbTableName = items[index-1] ? items[index-1].dbTable : ''
-    const col = this.nameRouter(columns[colIndex], prevDbTableName)
-
-    if(!col) return null
-
-    if(index === tree.length - 1) {
-
-      items[index-1] = { ...items[index-1], name: col.name, as: col.as }
-
-      return items
-    }
-
-    return this.createSelectMapFromTree(
-      columns[colIndex].columns,
-      tree,
-      index+1,
-      [ ...items, { dbTable: col.name, where: col.where, sort: col.sort, limit: col.limit } ]
-    )
-  }
-
   // +~====***********************====~+
   // +~====*****'NAME ROUTER'*****====~+
   // +~====***********************====~+
 
+  // nameString=>
+  nameString(name, dbTable = this.masterDbTable) {
+    // Has => so it's a function string
+    if(/^\w+\=\>/.test(name)) {
+      return this.funcString(name)
+    }
+
+    // Has `$` at the start so it's a jQ string
+    if(/^\$\w+/.test(name)) {
+      return this.jQExtractNoTable(name)
+    }
+
+    // Has a single name so it's a normal name selection
+    if(/^\w+$/.test(name)) {
+      return name
+    }
+
+    this.errors.push('Name didn\'t meet the requirements for a selection: ', name)
+    this.fatalError = true
+    return null
+
+  }
+
   // nameRouter=>
-  nameRouter(col, dbTable) {
+  nameRouter(col, dbTable = this.masterDbTable) {
 
     const {
       db,
@@ -469,7 +472,7 @@ module.exports = class JsonQL {
         this.fatalError = true
         return null
       }
-      return { name: this.funcString(col.name), as }
+      return this.funcString(col.name)
     }
 
     // Has `$` at the start so it's a jQ string
@@ -479,7 +482,7 @@ module.exports = class JsonQL {
         this.fatalError = true
         return null
       }
-      return { name: this.jQExtract(db, table, col.name), as }
+      return this.jQExtract(db, table, col.name)
     }
 
     // Has name.name so it's a dbName selection
@@ -489,12 +492,12 @@ module.exports = class JsonQL {
         this.fatalError = true
         return null
       }
-      return { name: col.name, where, sort, limit }
+      return col.name
     }
 
     // Has a dbTable and an `as` so it's to be made into a nested json
     if(/^\w+\.\w+$/g.test(col.name) && col.as) {
-      return { name: this.parseNestedJson(col), as };
+      return this.parseNestedJson(col)
     }
 
     // Has a single name so it's a normal name selection
@@ -506,7 +509,7 @@ module.exports = class JsonQL {
         return null
       }
 
-      return { name: col.name, as }
+      return col.name
     }
 
     this.errors.push('Column didn\'t meet the requirements for a selection: ', JSON.stringify(col))
@@ -714,6 +717,15 @@ module.exports = class JsonQL {
   extractColFromJQString(db, table, jQString) {
     let column = jQString.slice(1, jQString.search(/[\.\[]/));
     return column;
+  }
+
+  // jQExtractNoTable=>
+  jQExtractNoTable(jQStr) {
+    if(!this.plainStringValid(jQStr)) return;
+    const regx = /(\$\w+)|(\[\d\])|(\.\w+)|(\[\?[\w\s@#:;{},.!"£$%^&*()/?|`¬\-=+~]*\])/g
+    const matches = jQStr.match(regx);
+    const name = `${matches[0].slice(1)}`
+    return `JSON_UNQUOTE(JSON_EXTRACT(${name}, ${this.jQStringMaker(name, matches)}))`;
   }
 
   // jQExtract=>
