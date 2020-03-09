@@ -25,7 +25,8 @@ module.exports = class JsonQL {
 
   // selectSQ=>
   selectSQ(queryObj) {
-    let query = this.buildSelect(queryObj);
+    const treeMap = this.buildTreeMap([queryObj])
+    let query = this.buildSelect(queryObj, treeMap);
 
     if(this.fatalError) {
       return {
@@ -166,52 +167,52 @@ module.exports = class JsonQL {
   // +~====************====~+
 
   // buildSelect=>
-  buildSelect(queryObj) {
+  buildSelect(queryObj, treeMap) {
     // If the `name` has a custom function return that first.
     if(/^\w+\=\>/.test(queryObj.name)) {
       return this.funcString(queryObj.name)
     }
 
-    const {db, table} = this.splitDbAndTableNames(queryObj.name);
 
-    let columns = [];
-    if((queryObj.columns || []).length > 0) {
-      queryObj.columns.forEach(col => {
+    // The treeMap is an array of indexes showing us where everything
+    // is in queryObj, we want to make another array to build our
+    // select string with.
+    const selectMap = treeMap.map(tree => {
 
-        let name = this.setNameString(db, table, col);
-        if(!name) {
-          return;
-        }
+      return this.createSelectMapFromTree([queryObj], tree)
 
-        if(col.as) {
-          name += ` AS ${col.as}`;
-        }
-        columns.push(name);
-      });
-    } else {
-      this.errors.push('A Jseq select must have at least one column defined');
-      this.fatalError = true;
-    }
+      // Errored names will return null so filter them
+      // out so the whole thing doesn't break and we
+      // can return any errors properly.
+    }).filter(sel => sel !== null)
 
-    let select = `SELECT ${columns.join()}`;
+    console.log('selectMap :', selectMap);
 
-    let from = ` FROM ${queryObj.name}`;
+    // Now to build another array of selections each with a single target
+    // column.
+    const select = selectMap.map(sel => sel.map(col => {
+      let {
+        db,
+        table,
+        name,
+        as,
+        sort,
+        limit,
+        where
+      } = this.splitSelectItems(col, col.dbTable)
 
-    // The outer parent object finds using a HAVING but the nested one's use WHERE.
-    let where = this.setWhString(queryObj, ' HAVING ');
+      if(limit.length > 0) limit = ` LIMIT ${limit.join()}`
+      if(where.length > 0) where = ` WHERE ${where.join(' AND ')}`
+      if(sort.length > 0) sort = ` SORT ${sort}`
+      if(as.length > 0) as = ` AS ${as}`
 
-    let sort = '';
-    if(queryObj.sort && this.splitStringValidation(queryObj.sort)) {
-      sort = ` ORDER BY ${queryObj.sort}`;
-    }
+      return `(SELECT ${name} FROM ${db}.${table}${where}${sort}${limit})${as}`
 
-    let limit = queryObj.limit ? ` LIMIT ${queryObj.limit.map(n => n).join()}` : '';
+    }))
 
-    let as = '';
-    if(queryObj.as) {
-      as += ` AS ${queryObj.as}`;
-    }
-    return `(${select}${from}${where}${sort}${limit})${as}`;
+    console.log('select :', select);
+
+
   }
 
   // +~====************====~+
@@ -301,81 +302,175 @@ module.exports = class JsonQL {
     return `${del}${where}`;
   }
 
-  // +~====**********************====~+
-  // +~====**'NAME SELECTIONS'***====~+
-  // +~====**********************====~+
 
-  // setNameString=>
-  setNameString(db, table, col) {
+  // +~====********************====~+
+  // +~====***'TREE MAPPING'***====~+
+  // +~====********************====~+
 
-    if(/^\w+\.\w+$/g.test(col.name) && col.as) {
-      return this.parseNestedJson(col);
+  // buildTreeMap=>
+  buildTreeMap(columns, callback) {
+
+    let treeMap = []
+    let tree = [0]
+    let status = ''
+
+    do {
+
+      status = this.detectLeafStatus(columns, tree)
+
+      if(status === 'not enough branches') tree.push(0)
+
+      if(status === 'too many branches') tree.pop()
+      
+      if(status === 'no leaf') {
+        tree.pop()
+        tree[tree.length -1]++
+      }
+
+      if(status === 'found leaf') {
+        treeMap.push([ ...tree ])
+        tree[tree.length -1]++
+      }
+
+    } while (tree.length > 0)
+
+    return callback ? callback(treeMap) : treeMap
+
+  }
+
+  // detectLeafStatus=>
+  detectLeafStatus(columns, tree, index = 0) {
+
+    if(tree[index+1] !== undefined) {
+
+      if((columns[tree[index]] || {}).columns) {
+
+        // console.log('columns so continue')
+        // There's a columns item so go deeper
+        return this.detectLeafStatus(columns[tree[index]].columns, tree, index+1)
+
+      } else {
+        // There's no columns item so this tree is incorrect.
+        // console.log('too many branches')
+        return 'too many branches'
+      }
+
+    } else if((columns[tree[index]] || {}).name) {
+
+      if((columns[tree[index]] || {}).columns) {
+        // console.log('not enough branches');
+        return 'not enough branches'
+      } 
+
+      // console.log('found leaf')
+      return 'found leaf'
+
+    } else {
+      // console.log('no leaf')
+      return 'no leaf'
+    }
+  }
+
+  // createSelectMapFromTree=>
+  createSelectMapFromTree(columns, tree, index = 0, items = []) {
+
+    const colIndex = tree[index]
+
+    // We might need the dbTable value of the last item 
+    // so we can check the schema inside nameRouter
+    const prevDbTableName = items[index-1] ? items[index-1].dbTable : ''
+    const col = this.nameRouter(columns[colIndex], prevDbTableName)
+
+    if(!col) return null
+
+    if(index === tree.length - 1) {
+
+      items[index-1] = { ...items[index-1], name: col.name, as: col.as }
+
+      return items
     }
 
-    if(/^\w+\.\w+$/g.test(col.name)) {
-      return this.parseNestedSelect(col);
-    }
+    return this.createSelectMapFromTree(
+      columns[colIndex].columns,
+      tree,
+      index+1,
+      [ ...items, { dbTable: col.name, where: col.where, sort: col.sort, limit: col.limit } ]
+    )
+  }
 
+  // +~====***********************====~+
+  // +~====*****'NAME ROUTER'*****====~+
+  // +~====***********************====~+
+
+  // nameRouter=>
+  nameRouter(col, dbTable) {
+
+    const {
+      db,
+      table,
+      as,
+      sort,
+      limit,
+      where
+    } = this.splitSelectItems(col, dbTable)
+
+    // Has => so it's a function string
     if(/^\w+\=\>/.test(col.name)) {
-      return this.funcString(col.name);
+      return { name: this.funcString(col.name), as }
     }
 
+    // Has `$` at the start so it's a jQ string
     if(/^\$\w+/.test(col.name)) {
-      return this.jQExtract(db, table, col.name);
+      return { name: this.jQExtract(db, table, col.name), as }
     }
 
-    if(!this.columnValid(db, table, col.name)) {
-      this.errors.push(`${db}.${table}.${col.name} not found in schema`);
-      return null;
+    // Has name.name so it's a dbName selection
+    if(/^\w+\.\w+$/g.test(col.name) && !col.as) {
+      if(!col.where) {
+        this.errors.push('There must be a where item for every db.table selection: ', col.name)
+        this.fatalError = true
+        return null
+      }
+      return { name: col.name, where, sort, limit }
     }
-    this.nestedAS = ` AS ${col.name}`;
-    return `${db}.${table}.${col.name}`;
+
+    // Has a dbTable and an `as` so it's to be made into a nested json
+    if(/^\w+\.\w+$/g.test(col.name) && col.as) {
+      return { name: this.parseNestedJson(col), as };
+    }
+
+    // Has a single name so it's a normal name selection
+    if(/^\w+$/.test(col.name)) {
+
+      if(!this.schema[db][table][col.name]) {
+        this.errors.push(`${db}.${table}.${col.name} not found in schema`)
+        this.fatalError = true
+        return null
+      }
+
+      return { name: col.name, as }
+    }
+
+    this.errors.push('Column didn\'t meet the requirements for a selection: ', col)
+    this.fatalError = true
+    return null
+
+
+    // Check to see if the column name is valid, we'll do this one
+    // level up now because we'll have the dbName and name to check the
+    // schema properly.
+    // if(!this.columnValid(db, table, col.name)) {
+    //   this.errors.push(`${db}.${table}.${col.name} not found in schema`);
+    //   return null;
+    // }
+
+    // this.nestedAS = ` AS ${col.name}`;
+    // return `${db}.${table}.${col.name}`;
   }
 
   // +~====*************====~+
   // +~====**'PARSERS'**====~+
   // +~====*************====~+
-
-  // parseNestedSelect=>
-  parseNestedSelect(queryObj) {
-    const {db, table} = this.splitDbAndTableNames(queryObj.name);
-
-    if(queryObj.columns.length === 0) {
-      this.errors.push(`No columns included at ${db}.${table}`);
-      return '';
-    }
-    let columns = [];
-    queryObj.columns.forEach(col => {
-
-      let name = this.setNameString(db, table, col);
-      if(!name) return;
-
-      let as = this.nestedAS;
-      if(col.as) {
-        as = ` AS ${col.as}`;
-      }
-
-      const where = this.setWhString(queryObj, ' WHERE ');
-
-      let sort = '';
-      if(queryObj.sort && this.splitStringValidation(queryObj.sort)) {
-        sort = ` ORDER BY ${queryObj.sort}`;
-      }
-
-      // The parent or the child objects can have a limit but the parent takes priority.
-      let limit = queryObj.limit ? 
-        ` LIMIT ${queryObj.limit.map(n => n).join()}` 
-        : 
-        col.limit ?
-        ` LIMIT ${col.limit.map(n => n).join()}` 
-        :
-        '';
-
-      columns.push(`(SELECT ${name} FROM ${queryObj.name}${where}${sort}${limit})${as}`);
-
-    });
-    return columns.join();
-  }
 
   // parseNestedJson=>
   parseNestedJson(queryObj) {
@@ -383,7 +478,7 @@ module.exports = class JsonQL {
 
     if(queryObj.columns.length === 0) {
       this.errors.push(`No columns included at ${db}.${table}`);
-      return '';
+      return null
     }
 
     let where = this.setWhString(queryObj, ' WHERE ');
@@ -401,8 +496,8 @@ module.exports = class JsonQL {
     let keyVals = [];
     queryObj.columns.forEach(col => {
 
-      let name = this.setNameString(db, table, col);
-      if(!name) return;
+      let { name } = this.nameRouter(col, db + '.' + table);
+      if(!name) return null
       let key = col.as ? `'${col.as}'` : `'${col.name}'`;
       keyVals.push(`${key},${name}`);
 
@@ -630,6 +725,37 @@ module.exports = class JsonQL {
   // +~====**'UTILITIES'**====~+
   // +~====***************====~+
 
+  // splitSelectItems=>
+  splitSelectItems(col, dbTable) {
+    const {db, table} = this.splitDbAndTableNames(dbTable)
+
+    let name = ''
+    if(col.name) name = col.name
+
+    let as = ''
+    if(col.as) as = col.as
+
+    let sort = ''
+    if(col.sort) sort = col.sort
+
+    let limit = []
+    if(col.limit) limit = col.limit
+
+    let where = []
+    if(col.where) where = col.where
+
+    return {
+      db,
+      table,
+      name,
+      as,
+      sort,
+      limit,
+      where
+    }
+
+  }
+
   // setWhString=>
   setWhString(queryObj, type) {
     let wheres = [];
@@ -653,13 +779,9 @@ module.exports = class JsonQL {
   splitDbAndTableNames(name) {
     const dbTable = /^\w+\.\w+$/
     if(!dbTable.test(name)) {
-      this.errors.push('This name is not allowed: ' + name);
-      this.fatalError = true;
-      return null;
+      return {}
     } else if(!this.dbTableValid(name)) {
-      this.errors.push('This db and table are not in the schema: ' + name);
-      this.fatalError = true;
-      return null;
+      return {}
     }
     return {
       db: name.match(/^\w+|\w+$/g)[0],
