@@ -179,12 +179,8 @@ module.exports = class JsonQL {
     // is in queryObj, we want to make another array to build our
     // select string with.
 
-    // TODO:
-    // The way this is built it can only ever get a single record because
-    // every query is a nested select.
-    //
-    // We need to get all the top level selections, create a query out of them
-    // then nest the rest of the queries inside.
+    console.log('treeMap :', treeMap)
+
     const selectMap = treeMap.map(tree => {
 
       return this.createSelectMapFromTree([queryObj], tree)
@@ -194,14 +190,32 @@ module.exports = class JsonQL {
       // can return any errors properly.
     }).filter(sel => sel !== null)
 
+    console.log('selectMap :', selectMap)
+
+    // TODO:
+    // The way this is built it can only ever get a single record because
+    // every query is a nested select.
+    //
+    // We need to get all the top level selections, create a query out of them
+    // then nest the rest of the queries inside.
+    //
+    // If the selectMap item is length 1 it means it's a top level select.
+    //
+    // selectMap.forEach(item => console.log(item.length))
+
+
+
+
     // Now to build another array of selections each with a single target
     // column.
     const select = selectMap.map(( cols, i ) => {
-      return this.createSelectStringFromCols(cols)
+      const str = `${this.createSelectStringFromCols(cols)}${this.nestedAsNames[i]}`
+      return str
 
     })
 
-    return `SELECT ${select.map((sel,i) => `${sel}${this.nestedAsNames[i]}`).join()}`
+    console.log('select :', select)
+
 
   }
 
@@ -228,7 +242,7 @@ module.exports = class JsonQL {
       this.nestedAsNames.push(as)
       return `(SELECT ${name} FROM ${db}.${table}${where}${sort}${limit})`
     } else {
-      return `(SELECT ${this.createSelectStringFromCols(cols, index+1)} FROM ${db}.${table}${where}${sort}${limit})`
+      return `${this.createSelectStringFromCols(cols, index+1)}`
     }
 
   }
@@ -244,6 +258,11 @@ module.exports = class JsonQL {
     }
 
     const {db, table} = this.splitDbAndTableNames(queryObj.name);
+
+    if(!this.schema[db][table][queryObj.name]) {
+      this.errors.push(`${db}.${table}.${queryObj.name} not found in schema`)
+      this.fatalError = true
+    }
 
     let insert = `INSERT INTO ${db}.${table}`;
 
@@ -271,6 +290,11 @@ module.exports = class JsonQL {
     }
 
     const {db, table} = this.splitDbAndTableNames(queryObj.name);
+
+    if(!this.schema[db][table][queryObj.name]) {
+      this.errors.push(`${db}.${table}.${queryObj.name} not found in schema`)
+      this.fatalError = true
+    }
 
     let update = `UPDATE ${db}.${table}`;
 
@@ -312,6 +336,12 @@ module.exports = class JsonQL {
     }
 
     const {db, table} = this.splitDbAndTableNames(queryObj.name);
+
+    if(!this.schema[db][table][queryObj.name]) {
+      this.errors.push(`${db}.${table}.${queryObj.name} not found in schema`)
+      this.fatalError = true
+    }
+
     let del = `DELETE FROM ${db}.${table}`;
 
 
