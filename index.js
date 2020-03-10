@@ -202,17 +202,6 @@ module.exports = class JsonQL {
       // query so we have to start at the top and work our way down for each one.
       return `${this.buildColumnsFromTree(queryObj.columns, tree)}${this.nestedAsNames[i]}`
 
-      // TODO: this way of doing things breaks the nested json functionality. If we want that
-      // to work properly I think we'll have to incorperate it in the treeMap.
-      // It could be a another nested array if it's a nested json. We could even make this
-      // a nested object for nested object types.
-      //
-      // const treeMap = [
-      //   [ 0, 0 ],
-      //   [ 0, [[0], [1], [2]]],
-      //   [ 0, {0: [0], 1: [1], 2: [2]}]
-      // ]
-
     })
 
 
@@ -244,7 +233,7 @@ module.exports = class JsonQL {
     if(col.where) where = ` WHERE ${col.where.join(' AND ')}`
 
     // If we're at the last tree return the name and add an as to the
-    // top level
+    // top level.
     if(tree[index+1] === undefined || as.length > 0) {
 
 
@@ -422,6 +411,13 @@ module.exports = class JsonQL {
 
     } else if((columns[tree[index]] || {}).name) {
 
+      // If there's an 'as' we'll stop prematurely because
+      // this is a nested json selection.
+      if(
+        (columns[tree[index]] || {}).columns &&
+        (columns[tree[index]] || {}).as
+      ) return 'found leaf'
+
       if((columns[tree[index]] || {}).columns) {
         // console.log('not enough branches');
         return 'not enough branches'
@@ -556,7 +552,7 @@ module.exports = class JsonQL {
     let keyVals = [];
     queryObj.columns.forEach(col => {
 
-      let { name } = this.nameRouter(col, db + '.' + table);
+      let name = this.nameRouter(col, db + '.' + table);
       if(!name) return null
       let key = col.as ? `'${col.as}'` : `'${col.name}'`;
       keyVals.push(`${key},${name}`);
