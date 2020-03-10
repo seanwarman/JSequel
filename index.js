@@ -577,6 +577,7 @@ module.exports = class JsonQL {
       /\w+\=\>|\(|\)|[`"'](.*?)[`"']|\$*(\w+\.)+\w+|\$*\w+|\\|\/|\+|>=|<=|=>|>|<|-|\*|=/g
     );
 
+
     return this.convertFunc(func, args, data);
   }
 
@@ -607,7 +608,13 @@ module.exports = class JsonQL {
       str = this.customFns[func](...newArgs, data);
 
     } else {
-      str = `${func.toUpperCase()}(${newArgs.join()})`;
+      str = `${func.toUpperCase()}(${newArgs.map(arg => {
+        if(/^"\$\w+/.test(arg)) {
+          return this.jQExtractNoTable(arg.slice(1, arg.length - 1))
+        }
+        return arg
+
+      }).join()})`;
     }
     return str;
   }

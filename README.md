@@ -407,7 +407,12 @@ You can search the json column by any string value within using a string that st
 This finds an object in an array of objects by searching for the string 'Big Mac' then 
 returns whatever is assigned to the key called `type`.
 
-You can use **jQStrings** wherever you find a `name` parameter.
+You can use **jQStrings** wherever you find a `name` parameter or to use them inside a function
+argument just wrap the string in quotes...
+
+```js
+{name: 'concat=>("£" "$mealTypes[?Sandwich].price")'}
+```
 
 They are also compatible with the `data` sent to an `updateQL` function.
 Rather than adding the **jQString** as a value, instead it goes in place of the *keyname* of the value you want to update.
