@@ -202,6 +202,17 @@ module.exports = class JsonQL {
       // query so we have to start at the top and work our way down for each one.
       return `${this.buildColumnsFromTree(queryObj.columns, tree)}${this.nestedAsNames[i]}`
 
+      // TODO: this way of doing things breaks the nested json functionality. If we want that
+      // to work properly I think we'll have to incorperate it in the treeMap.
+      // It could be a another nested array if it's a nested json. We could even make this
+      // a nested object for nested object types.
+      //
+      // const treeMap = [
+      //   [ 0, 0 ],
+      //   [ 0, [[0], [1], [2]]],
+      //   [ 0, {0: [0], 1: [1], 2: [2]}]
+      // ]
+
     })
 
 
@@ -234,7 +245,7 @@ module.exports = class JsonQL {
 
     // If we're at the last tree return the name and add an as to the
     // top level
-    if(tree[index+1] === undefined) {
+    if(tree[index+1] === undefined || as.length > 0) {
 
 
       // We often need the as name at the top level, outside of the nested
@@ -248,7 +259,6 @@ module.exports = class JsonQL {
       return this.nameRouter(col, prevDbTable)
     }
 
-
     // The other option is we keep digging...
     return `(SELECT ${this.buildColumnsFromTree(col.columns, tree, index+1, col.name)} FROM ${name}${where}${limit}${sort})`
 
@@ -261,7 +271,7 @@ module.exports = class JsonQL {
   // buildCreate=>
   buildCreate(queryObj, data) {
     if(/^\w+\=\>/.test(queryObj.name)) {
-      return this.funcString(queryObj.name)
+      return this.funcString(queryObj.name, data)
     }
 
     const {db, table} = this.splitDbAndTableNames(queryObj.name);
@@ -293,7 +303,7 @@ module.exports = class JsonQL {
   // buildUpdate=>
   buildUpdate(queryObj, data) {
     if(/^\w+\=\>/.test(queryObj.name)) {
-      return this.funcString(queryObj.name)
+      return this.funcString(queryObj.name, data)
     }
 
     const {db, table} = this.splitDbAndTableNames(queryObj.name);
@@ -561,7 +571,7 @@ module.exports = class JsonQL {
   // +~====*************************====~+
 
   // funcString=>
-  funcString(name) {
+  funcString(name, data) {
     if(!this.plainStringValid(name)) return;
     const func = name.slice(0, name.indexOf('=>'))
 
@@ -571,11 +581,11 @@ module.exports = class JsonQL {
       /\w+\=\>|\(|\)|[`"'](.*?)[`"']|\$*(\w+\.)+\w+|\$*\w+|\\|\/|\+|>=|<=|=>|>|<|-|\*|=/g
     );
 
-    return this.convertFunc(func, args, 0);
+    return this.convertFunc(func, args, data);
   }
 
   // convertFunc=>
-  convertFunc(func, args) {
+  convertFunc(func, args, data) {
 
     let newArgs = args;
 
@@ -595,7 +605,11 @@ module.exports = class JsonQL {
     // I'm doing toUpperCase here just to denote it's definitely a mysql function.
     let str = '';
     if(this.customFns[func]) {
-      str = this.customFns[func](...newArgs);
+
+      // Add the data here as well, if this is an update or
+      // create it gives the user access to it in the custom function.
+      str = this.customFns[func](...newArgs, data);
+
     } else {
       str = `${func.toUpperCase()}(${newArgs.join()})`;
     }
