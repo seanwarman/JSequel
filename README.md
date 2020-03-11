@@ -101,7 +101,8 @@ Here are all the possible keys in a Jsequel object.
   columns: [Object],
   where: [String],
   limit: [Number,Number],
-  sort: String
+  sort: String,
+  as: String
 }
 ```
 
@@ -444,43 +445,6 @@ jSeq.updateSQ({
 This project is basically a simplified v2 of [JsonQL](https://github.com/seanwarman/jsonQL). If you want
 an idea of the roadmap for **JSequel** you can check out that project.
 
-# Example
-This is how I currently use JSequel with a frontend app project. 
-
-I have four endpoints in my backend project for each CRUD method. They'd look a bit like this
-in an ExpressJS backend...
-
-```js
-app.get('/jseq/:queryObj', myGetController);
-app.post('/jseq/:queryObj', myPostController);
-app.put('/jseq/:queryObj', myPutController);
-app.delete('/jseq/:queryObj', myDeleteController);
-```
-
-Each controller looks like the node example further above, except they will use `jseq.selectSQ` for the GET,
-`jseq.createSQ` for the POST, `jseq.updateSQ` for the PUT and `jseq.deleteSQ` for the DELETE.
-
-Using a ajax method like `fetch` or `axios` I'd just send my request to one of the above endpoints using the appropriate CRUD method. 
-```js
-axios.get(`/jseq/${queryObj}`);
-```
-You can use the native javascript method `encodeURIComponent` with `JSON.stringify` to put the object directly 
-into the URL which allows you to send the object without putting anything into the `body` of the request.
-
-```js
-const queryObj = decodeURIComponent(JSON.stringify({
-  name: 'mcDonalds.employees',
-  columns: [
-    {name: 'firstName'},
-    {name: 'lastName'},
-    {name: 'telephone'},
-  ]
-}))
-
-
-const employees = await axios.get(`/jseq/${queryObj}`);
-```
-
 ### MongoDB-like associations
 Add an `as` to a nested column and JSequel will return those records inside an array.
 
@@ -520,55 +484,43 @@ This is very un-mysqlish but really useful for modern web apps.
 
 When using nested jsons you must stick to more mongo-like results. So rather than 
 doing mysql joins and having data from associate tables included in your results
-you'll have to instead further nest the results of associated tables.
+you'll have to instead nest the results of associated tables.
 
-If I wanted to get data from another record into my already nested json result, I 
-should expect those results to be in an array under a keyname that I specify with an
-`as`.
+# Example
+This is how I currently use JSequel with a frontend app project. 
+
+I have four endpoints in my backend project for each CRUD method. They'd look a bit like this
+in an ExpressJS backend...
 
 ```js
-{
-  name: 'macDonalds.meals',
-  columns: [
-    {name: 'title'},
-    {
-      name: 'macDonalds.customers',
-      columns: [
-        {name: 'firstName'},
-        {name: 'lastName'},
-        {
-          name: 'macDonalds.emails',
-          columns: [
-            {name: 'emailAddress'}
-          ],
-          where: ['customers.emailKey = emails.emailKey'],
-          as: 'email' // << Another as must be added for this to work
-        }
-      ],
-      where: ['meals.mealKey = customers.favouriteMealKey'],
-      as: 'customersWhoLike'
-    }
-  ],
-  where: ['title = "Big Mac"']
-}
+app.get('/jseq/:queryObj', myGetController);
+app.post('/jseq/:queryObj', myPostController);
+app.put('/jseq/:queryObj', myPutController);
+app.delete('/jseq/:queryObj', myDeleteController);
 ```
 
-The results will look like this with the `emailAddress` nested inside an `email` array.
+Each controller looks like the node example further above, except they will use `jseq.selectSQ` for the GET,
+`jseq.createSQ` for the POST, `jseq.updateSQ` for the PUT and `jseq.deleteSQ` for the DELETE.
+
+Using a ajax method like `fetch` or `axios` I'd just send my request to one of the above endpoints using the appropriate CRUD method. 
+```js
+axios.get(`/jseq/${queryObj}`);
+```
+You can use the native javascript method `encodeURIComponent` with `JSON.stringify` to put the object directly 
+into the URL which allows you to send the object without putting anything into the `body` of the request.
 
 ```js
-{
-  title: 'Big Mac',
-  customersWhoLike: [
-    {
-      firstName: 'bill', 
-      lastName: 'ray',
-      email: [
-        { emailAddress: 'bill.ray@nicetown.com' }
-      ]
-    },
-    // ...etc
+const queryObj = decodeURIComponent(JSON.stringify({
+  name: 'mcDonalds.employees',
+  columns: [
+    {name: 'firstName'},
+    {name: 'lastName'},
+    {name: 'telephone'},
   ]
-}
+}))
+
+
+const employees = await axios.get(`/jseq/${queryObj}`);
 ```
 
 
