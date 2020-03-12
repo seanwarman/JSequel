@@ -271,8 +271,8 @@ module.exports = class JsonQL {
 
     const {db, table} = this.splitDbAndTableNames(queryObj.name);
 
-    if(!this.schema[db][table][queryObj.name]) {
-      this.errors.push(`${db}.${table}.${queryObj.name} not found in schema`)
+    if(!this.schema[db][table]) {
+      this.errors.push(`${db}.${table} not found in schema`)
       this.fatalError = true
     }
 
@@ -303,8 +303,8 @@ module.exports = class JsonQL {
 
     const {db, table} = this.splitDbAndTableNames(queryObj.name);
 
-    if(!this.schema[db][table][queryObj.name]) {
-      this.errors.push(`${db}.${table}.${queryObj.name} not found in schema`)
+    if(!this.schema[db][table]) {
+      this.errors.push(`${db}.${table} not found in schema`)
       this.fatalError = true
     }
 
@@ -349,8 +349,8 @@ module.exports = class JsonQL {
 
     const {db, table} = this.splitDbAndTableNames(queryObj.name);
 
-    if(!this.schema[db][table][queryObj.name]) {
-      this.errors.push(`${db}.${table}.${queryObj.name} not found in schema`)
+    if(!this.schema[db][table]) {
+      this.errors.push(`${db}.${table} not found in schema`)
       this.fatalError = true
     }
 
