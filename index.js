@@ -33,7 +33,7 @@ module.exports = class JsonQL {
       return {
         status: 'error',
         errors: this.errors,
-        query: ''
+        query
       }
     }
 
@@ -51,7 +51,7 @@ module.exports = class JsonQL {
       return {
         status: 'error',
         errors: this.errors,
-        query: ''
+        query
       }
     }
 
@@ -69,7 +69,7 @@ module.exports = class JsonQL {
       return {
         status: 'error',
         errors: this.errors,
-        query: ''
+        query
       }
     }
 
@@ -87,7 +87,7 @@ module.exports = class JsonQL {
       return {
         status: 'error',
         errors: this.errors,
-        query: ''
+        query
       }
     }
 
@@ -195,14 +195,20 @@ module.exports = class JsonQL {
     // treeMap is an array of indexes showing us where everything
     // is in queryObj.columns.
 
-    const columns = treeMap.map((tree, i) => {
+    const columns = treeMap.reduce((array, tree, i) => {
 
       // We want to make an array of all the different column selections for
       // our query. SQL will only let you select a single column in a nested
       // query so we have to start at the top and work our way down for each one.
-      return `${this.buildColumnsFromTree(queryObj.columns, tree)}${this.nestedAsNames[i]}`
+      const column = this.buildColumnsFromTree(queryObj.columns, tree)
 
-    })
+      // buildColumnsFromTree returns null if there's an error with the 
+      // column so miss this one out if that's the case...
+      if(!column) return array
+
+      return [ ...array, `${column}${this.nestedAsNames[i]}` ]
+
+    }, [])
 
 
     // Finally put all the columns into a master selection and return the result.
@@ -436,29 +442,6 @@ module.exports = class JsonQL {
   // +~====*****'NAME ROUTER'*****====~+
   // +~====***********************====~+
 
-  // nameString=>
-  nameString(name, dbTable = this.masterDbTable) {
-    // Has => so it's a function string
-    if(/^\w+\=\>/.test(name)) {
-      return this.funcString(name)
-    }
-
-    // Has `$` at the start so it's a jQ string
-    if(/^\$\w+/.test(name)) {
-      return this.jQExtractNoTable(name)
-    }
-
-    // Has a single name so it's a normal name selection
-    if(/^\w+$/.test(name)) {
-      return name
-    }
-
-    this.errors.push('Name didn\'t meet the requirements for a selection: ', name)
-    this.fatalError = true
-    return null
-
-  }
-
   // nameRouter=>
   nameRouter(col, dbTable = this.masterDbTable) {
 
@@ -475,7 +458,7 @@ module.exports = class JsonQL {
     if(/^\w+\=\>/.test(col.name)) {
       if(!col.as) {
         this.errors.push('There must be an "as" value for every function selection: ', col.name)
-        this.fatalError = true
+        // this.fatalError = true
         return null
       }
       return this.funcString(col.name)
@@ -485,7 +468,7 @@ module.exports = class JsonQL {
     if(/^\$\w+/.test(col.name)) {
       if(!col.as) {
         this.errors.push('There must be an "as" value for every jQString selection: ', col.name)
-        this.fatalError = true
+        // this.fatalError = true
         return null
       }
       return this.jQExtract(db, table, col.name)
@@ -495,7 +478,7 @@ module.exports = class JsonQL {
     if(/^\w+\.\w+$/g.test(col.name) && !col.as) {
       if(!col.where) {
         this.errors.push('There must be a "where" value for every db.table selection: ', col.name)
-        this.fatalError = true
+        // this.fatalError = true
         return null
       }
       return col.name
@@ -511,7 +494,7 @@ module.exports = class JsonQL {
 
       if(!this.schema[db][table][col.name]) {
         this.errors.push(`${db}.${table}.${col.name} not found in schema`)
-        this.fatalError = true
+        // this.fatalError = true
         return null
       }
 
@@ -519,7 +502,7 @@ module.exports = class JsonQL {
     }
 
     this.errors.push('Column didn\'t meet the requirements for a selection: ', JSON.stringify(col))
-    this.fatalError = true
+    // this.fatalError = true
     return null
 
   }
