@@ -189,7 +189,7 @@ module.exports = class JsonQL {
 
     if(limit.length > 0) limit = ` LIMIT ${limit.join()}`
     if(where.length > 0) where = ` WHERE ${where.join(' AND ')}`
-    if(sort.length > 0) sort = ` SORT ${sort}`
+    if(sort.length > 0) sort = ` ORDER BY ${sort}`
 
 
     // treeMap is an array of indexes showing us where everything
@@ -230,7 +230,7 @@ module.exports = class JsonQL {
     if(col.as) as = ` AS ${col.as}`
 
     let sort = ''
-    if(col.sort) sort = ` SORT ${col.sort}`
+    if(col.sort) sort = ` ORDER BY ${col.sort}`
 
     let limit = ''
     if(col.limit) limit = ` LIMIT ${col.limit.join()}`
