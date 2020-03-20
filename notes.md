@@ -542,6 +542,7 @@ But because we have the funny `as` behaviour with the nested selects it's
 a little bit complicated.
 
 
+Build JSequel to be compatibe with mongoose.
 
 
 Allow a string to be passed to the query as well as a query object...
