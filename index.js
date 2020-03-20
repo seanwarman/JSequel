@@ -43,6 +43,7 @@ module.exports = class JsonQL {
       query
     }
   }
+
   // createSQ=>
   createSQ(queryObj, data) {
     let query = this.buildCreate(queryObj, data);
@@ -271,7 +272,7 @@ module.exports = class JsonQL {
 
     const {db, table} = this.splitDbAndTableNames(queryObj.name);
 
-    if(!this.schema[db][table]) {
+    if(!(this.schema[db] || {})[table]) {
       this.errors.push(`${db}.${table} not found in schema`)
       this.fatalError = true
     }
@@ -303,7 +304,7 @@ module.exports = class JsonQL {
 
     const {db, table} = this.splitDbAndTableNames(queryObj.name);
 
-    if(!this.schema[db][table]) {
+    if(!(this.schema[db] || {})[table]) {
       this.errors.push(`${db}.${table} not found in schema`)
       this.fatalError = true
     }
@@ -349,7 +350,7 @@ module.exports = class JsonQL {
 
     const {db, table} = this.splitDbAndTableNames(queryObj.name);
 
-    if(!this.schema[db][table]) {
+    if(!(this.schema[db] || {})[table]) {
       this.errors.push(`${db}.${table} not found in schema`)
       this.fatalError = true
     }
@@ -492,9 +493,9 @@ module.exports = class JsonQL {
     // Has a single name so it's a normal name selection
     if(/^\w+$/.test(col.name)) {
 
-      if(!this.schema[db][table][col.name]) {
+      if(!((this.schema[db] || {})[table] || {})[col.name]) {
         this.errors.push(`${db}.${table}.${col.name} not found in schema`)
-        // this.fatalError = true
+        if(db === undefined || table === undefined) this.fatalError = true
         return null
       }
 
