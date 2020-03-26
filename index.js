@@ -182,7 +182,8 @@ module.exports = class JsonQL {
       as,
       sort,
       limit,
-      where
+      where,
+      having
     } = this.splitSelectItems(queryObj, queryObj.name)
 
     // This comes in handy.
@@ -190,6 +191,7 @@ module.exports = class JsonQL {
 
     if(limit.length > 0) limit = ` LIMIT ${limit.join()}`
     if(where.length > 0) where = ` WHERE ${where.join(' AND ')}`
+    if(having.length > 0) having = ` HAVING ${having.join(' AND ')}`
     if(sort.length > 0) sort = ` ORDER BY ${sort}`
 
 
@@ -213,7 +215,7 @@ module.exports = class JsonQL {
 
 
     // Finally put all the columns into a master selection and return the result.
-    return `SELECT ${columns.join()} FROM ${db}.${table}${where}${sort}${limit}`
+    return `SELECT ${columns.join()} FROM ${db}.${table}${where}${having}${sort}${limit}`
 
 
 
@@ -804,6 +806,9 @@ module.exports = class JsonQL {
     let where = []
     if(col.where) where = col.where
 
+    let having = []
+    if(col.having) having = col.having
+
     return {
       db,
       table,
@@ -811,7 +816,8 @@ module.exports = class JsonQL {
       as,
       sort,
       limit,
-      where
+      where,
+      having
     }
 
   }
