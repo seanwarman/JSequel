@@ -100,6 +100,7 @@ Here are all the possible keys in a Jsequel object.
   name: String,
   columns: [Object],
   where: [String],
+  having: [String],
   limit: [Number,Number],
   sort: String,
   as: String
@@ -503,9 +504,11 @@ Each controller looks like the node example further above, except they will use 
 `jseq.createSQ` for the POST, `jseq.updateSQ` for the PUT and `jseq.deleteSQ` for the DELETE.
 
 Using a ajax method like `fetch` or `axios` I'd just send my request to one of the above endpoints using the appropriate CRUD method. 
+
 ```js
 axios.get(`/jseq/${queryObj}`);
 ```
+
 You can use the native javascript method `encodeURIComponent` with `JSON.stringify` to put the object directly 
 into the URL which allows you to send the object without putting anything into the `body` of the request.
 
