@@ -528,7 +528,6 @@ to be the name of the column we're selecting in the innermost select.
 There's a bug with posting, if any field is undefined it breaks createSQ
 
 
-==== MARK 
 
 There's a small bug where if you put a function in a nested select
 the `as` will automatically be set to the original function string syntax...
@@ -541,16 +540,17 @@ probably be handling the `as` as well whereas at the moment it's outside it.
 But because we have the funny `as` behaviour with the nested selects it's
 a little bit complicated.
 
+==== MARK 
+
+Auto key and hidden to the schema.
 
 Build JSequel to be compatibe with mongoose.
-
 
 Allow a string to be passed to the query as well as a query object...
 `createSQ('mcDonalds.meals', data);`
 `selectSQ('filterOptions=>()');`
 `updateSQ('mcDonalds.meals.mealKey = "123"', data);`
 
-Auto key and hidden to the schema.
 Have update and create return the record they created/updated.
 
 Input and output custom functions (myFunc=> myFunc->)
