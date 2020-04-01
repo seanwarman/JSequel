@@ -540,7 +540,87 @@ probably be handling the `as` as well whereas at the moment it's outside it.
 But because we have the funny `as` behaviour with the nested selects it's
 a little bit complicated.
 
+
+
+
+
 ==== MARK 
+
+Input and output custom functions (myFunc=> myFunc->)
+
+Output functions could work like the following.
+
+In a backend controller...
+
+```js
+jseq.addCustomOutput({
+
+  // The argument is all the results of the query
+  convertNames(bookings) {
+
+    // Always return the result.
+    return bookings.map(booking => {
+
+
+        // Decode the booking name from a URI type string.
+        return {
+          ...booking
+          bookingName: decodeURIComponent(booking.bookingName)
+        }
+
+    })
+
+  }
+})
+```
+
+In the jseq object we'll add a new `output` array item that lists the names
+of any custom output functions you want to use.
+
+```js
+selectSQ({
+  name: 'databaseName.bookings', 
+  columns: [ {name: 'bookingName'} ], 
+  output: ['convertNames']
+})
+```
+
+The output would also decide on the order the functions are run on the array
+or item.
+
+They could be more abstracted than this so that they work on more than just
+one type of record. For example we could have the same above function work on
+any param name you give it...
+
+```js
+output: [`convertNames->('bookingName')`]
+```
+
+Note we're passing in a string here that could be anything, not a mysql column type.
+
+Now we can use the string we gave it to select the right parameter on the record.
+
+```js
+
+// Probably always send the records through the first arg then any others after.
+convertNames(records, dataIndex) {
+
+return records.map(record => {
+
+    // dataIndex in this example will be 'bookingName'
+    return {
+      ...record
+      [dataIndex]: decodeURIComponent(record[dataIndex])
+    }
+
+})
+```
+
+
+
+
+
+
 
 Auto key and hidden to the schema.
 
@@ -553,7 +633,6 @@ Allow a string to be passed to the query as well as a query object...
 
 Have update and create return the record they created/updated.
 
-Input and output custom functions (myFunc=> myFunc->)
 
 Could custom functions not return a string and instead *do* something?
 Allow custom functions to be nested inside one another.
