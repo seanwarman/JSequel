@@ -26,8 +26,20 @@ module.exports = class JsonQL {
 
   // selectSQ=>
   selectSQ(queryObj) {
-    const treeMap = this.buildTreeMap(queryObj.columns)
-    let query = this.buildSelect(queryObj, treeMap);
+    let query = ''
+    let treeMap = []
+
+    // If the `name` has a custom function return that only.
+    if(/^\w+\=\>/.test(queryObj.name)) {
+
+      query = this.funcString(queryObj.name)
+
+    } else {
+
+      treeMap = this.buildTreeMap(queryObj.columns)
+      query = this.buildSelect(queryObj, treeMap);
+
+    }
 
     if(this.fatalError) {
       return {
@@ -46,7 +58,18 @@ module.exports = class JsonQL {
 
   // createSQ=>
   createSQ(queryObj, data) {
-    let query = this.buildCreate(queryObj, data);
+    let query = ''
+
+    if(/^\w+\=\>/.test(queryObj.name)) {
+
+      query = this.funcString(queryObj.name, data)
+
+    } else {
+
+      query = this.buildCreate(queryObj, data);
+
+    }
+
 
     if(this.fatalError) {
       return {
@@ -64,7 +87,16 @@ module.exports = class JsonQL {
   }
   // updateSQ=>
   updateSQ(queryObj, data) {
-    let query = this.buildUpdate(queryObj, data);
+    let query = ''
+
+    if(/^\w+\=\>/.test(queryObj.name)) {
+
+      query = this.funcString(queryObj.name, data)
+
+    } else {
+
+      query = this.buildUpdate(queryObj, data);
+    }
 
     if(this.fatalError) {
       return {
@@ -82,7 +114,17 @@ module.exports = class JsonQL {
   }
   // deleteSQ=>
   deleteSQ(queryObj) {
-    let query = this.buildDelete(queryObj);
+    let query = ''
+
+    if(/^\w+\=\>/.test(queryObj.name)) {
+
+      query = this.funcString(queryObj.name)
+
+    } else {
+
+      query = this.buildDelete(queryObj);
+    }
+
 
     if(this.fatalError) {
       return {
@@ -170,10 +212,6 @@ module.exports = class JsonQL {
 
   // buildSelect=>
   buildSelect(queryObj, treeMap) {
-    // If the `name` has a custom function return that first.
-    if(/^\w+\=\>/.test(queryObj.name)) {
-      return this.funcString(queryObj.name)
-    }
 
     let {
       db,
@@ -268,9 +306,6 @@ module.exports = class JsonQL {
 
   // buildCreate=>
   buildCreate(queryObj, data) {
-    if(/^\w+\=\>/.test(queryObj.name)) {
-      return this.funcString(queryObj.name, data)
-    }
 
     const {db, table} = this.splitDbAndTableNames(queryObj.name);
 
@@ -300,9 +335,6 @@ module.exports = class JsonQL {
 
   // buildUpdate=>
   buildUpdate(queryObj, data) {
-    if(/^\w+\=\>/.test(queryObj.name)) {
-      return this.funcString(queryObj.name, data)
-    }
 
     const {db, table} = this.splitDbAndTableNames(queryObj.name);
 
@@ -340,10 +372,6 @@ module.exports = class JsonQL {
 
   // buildDelete=>
   buildDelete(queryObj) {
-    if(/^\w+\=\>/.test(queryObj.name)) {
-      return this.funcString(queryObj.name)
-    }
-
     if(!queryObj.where) {
       this.fatalError = true;
       this.errors.push('No where string present. JSequel cannot delete all records in a single query.');

@@ -546,6 +546,9 @@ a little bit complicated.
 
 ==== MARK 
 
+MYSQL tables build using Jseq schema. You should be able to write the Jseq schema
+and it will build or add to your database schema from it.
+
 Input and output custom functions (myFunc=> myFunc->)
 
 Output functions could work like the following.
