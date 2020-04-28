@@ -546,6 +546,42 @@ a little bit complicated.
 
 ==== MARK 
 
+Custom functions to have access to the body of a request.
+
+This could be a custom object you add to the constructor of the JSeq object.
+The first arg is always the schema but the second arg could be what ever you want...
+
+```
+const request = {
+  body: { thing: 'cool' }
+}
+const jseq = new JSeq(schema, request)
+```
+
+Now we could access anything we want on the request object when we call a
+custom function...
+
+```
+name: 'filterOptions=>("@.body")'
+```
+
+Then in the custom function definition we the body object will be passed as an
+argument in string form...
+
+```
+filterOptions: body => {
+  body = JSON.parse(body.slice(1, -1))
+  // do something with body object...
+}
+```
+
+
+
+
+
+
+
+
 MYSQL tables build using Jseq schema. You should be able to write the Jseq schema
 and it will build or add to your database schema from it.
 

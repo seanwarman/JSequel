@@ -5,19 +5,21 @@ module.exports = class JsonQL {
     this.errors = [];
     this.fatalError = false;
 
-    this.select = ''
+    this.select = '';
     this.from = '';
     this.where = '';
 
-    this.masterDbTable = ''
+    this.masterDbTable = '';
     this.customFns = {};
+    this.customObj = {};
     this.nestedAS = '';
-    this.nestedAsNames = []
+    this.nestedAsNames = [];
   }
 
   // addCustomFns=>
-  addCustomFns(customFns) {
+  addCustomFns(customFns, customObj) {
     this.customFns = customFns;
+    this.customObj = customObj;
   }
 
   // +~====***************====~+
@@ -675,6 +677,27 @@ module.exports = class JsonQL {
 
   }
 
+  parseCustomObj(arr, arg) {
+
+    // Grab all the selections in an array: '@.thing' = ['@', 'thing']
+    let customObj = {}
+    const selections = arg.slice(1,-1).split('.')
+
+    // Turn arg into the object being selected.
+    selections.forEach((sel, i) => {
+      if(i === 0) customObj = this.customObj
+      else customObj = customObj[sel]
+    })
+
+    return [...arr, customObj];
+  }
+
+  parseCustomFunc(arr, arg) {
+    arg = arg.slice(0, -2);
+    if(this.customFns[arg]) return [...arr, this.customFns[arg](...newArgs.slice(start, end))];
+    return [...arr, arg.toUpperCase() + '(' + newArgs.slice(start, end).join() + ')'];
+  }
+
   // flattenArgs=>
   flattenArgs(newArgs, argPositions) {
     let start = argPositions[0][0];
@@ -688,22 +711,62 @@ module.exports = class JsonQL {
     // the outermost argument and just need to return the
     // whole thing.
     if(start === 1 && end !== 1) {
-      return newArgs.slice(start, end);
 
-    // if the start and end are both 1 there's no arguments.
+      newArgs = newArgs.slice(start, end).map(arg => { 
+
+        if(/\w+\=\>/.test(arg)) {
+          arg = arg.slice(0, -2);
+          if(this.customFns[arg]) return this.customFns[arg]();
+          return arg.toUpperCase() + '()';
+        }
+
+
+        if(/^"@/.test(arg) && this.customObj) {
+
+          // Grab all the selections in an array: '@.thing' = ['@', 'thing']
+          let customObj = {}
+          const selections = arg.slice(1,-1).split('.')
+
+          // Turn arg into the object being selected.
+          selections.forEach((sel, i) => {
+            if(i === 0) customObj = this.customObj
+            else customObj = customObj[sel]
+          })
+
+          return customObj
+        }
+
+
+
+        return arg;
+
+      })
+
+      return newArgs
+
+
+    // if the start and end are both 1 there's no arguments at all.
     } else if(start === 1 && end === 1) {
+
       return [];
     }
 
     // If there's no arguments, for example [3, 3].
     // We can just flatten this arg 
     if(start === end) {
+
       return newArgs.reduce((arr,arg,i) => {
 
         if(/\w+\=\>/.test(arg) && i === start-2) {
-          arg = arg.slice(0, -2);
-          if(this.customFns[arg]) return [...arr, this.customFns[arg](...newArgs.slice(start, end))];
-          return [...arr, arg.toUpperCase() + '(' + newArgs.slice(start, end).join() + ')'];
+
+          return this.parseCustomFunc(arr,arg) 
+        }
+
+        // If this argument is a custom object selection: '@.thing'
+        // And there's a customObj on this.
+        if(/^"@/.test(arg) && i === start-2 && this.customObj) {
+
+          return this.parseCustomObj(arr, arg)
         }
 
         if(i === start - 1 || i === start) {
@@ -723,10 +786,17 @@ module.exports = class JsonQL {
     if(end > start) {
       return newArgs.reduce((arr,arg,i) => {
 
+
         if(/\w+\=\>/.test(arg) && i === start-2) {
-          arg = arg.slice(0, -2);
-          if(this.customFns[arg]) return [...arr, this.customFns[arg](...newArgs.slice(start, end))];
-          return [...arr, arg.toUpperCase() + '(' + newArgs.slice(start, end).join() + ')'];
+
+          return this.parseCustomFunc(arr,arg) 
+        }
+
+        // If this argument is a custom object selection: '@.thing'
+        // And there's a customObj on this.
+        if(/^"@/.test(arg) && i === start-2 && this.customObj) {
+
+          return this.parseCustomObj(arr, arg)
         }
 
         if(i === start - 1 || (i >= start && i <= end)) {

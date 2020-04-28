@@ -288,6 +288,7 @@ All function names must be preceeded by `=>()`. All arguments are
 seperated by a single space unless inside a " string ".
 
 # Custom Functions
+
 Add custom functions using `addCustomFns` in your node controller
 to make any kind of custom selection.
 
@@ -324,6 +325,8 @@ firstAndLast(first, space, last) {
 }
 ```
 
+### Usage
+
 Custom functions can be used to replace a whole query. If you 
 want JSequel to do something a bit more complicated, make
 the whole query inside the custom function and then call it
@@ -346,6 +349,81 @@ jseq.addCustomFns({
 let jqueryObj = jseq.selectQL({
   name: 'unionRecords=>(macDonalds.orders macDonalds.meals)'
 });
+```
+
+Any custom function used in combination with either `updateSQ` or
+`createSQ` will be passed the `data` into it's *last* argument.
+
+```js
+
+// When I pass my data into the update...
+
+jseq.updateSQ({
+  name: 'myCustomFunc=>("123")'
+}, data)
+
+
+// I can access the data in the last arg of the custom function...
+
+jseq.addCustomFns({
+  myCustomFunc: function(numbers, data) {
+
+    // do stuff...
+
+  }
+})
+
+
+```
+
+
+### Custom Objects
+
+Custom functions can also access a custom object using `@`.
+
+```js
+name: 'useObjectInQuery=>("@")'
+```
+
+Add custom objects in the second argument of `addCustomFns`.
+
+```js
+const credentials = {
+  publicKey: '321'
+}
+
+jseq.addCustomFns({useObjectInQuery}, credentials)
+```
+
+Now `@` represents the `credentials` object.
+
+```js
+jseq.addCustomFns({
+
+  useObjectInQuery: credentials => {
+
+    // do stuff with credentials...
+
+  }
+
+}, credentials)
+```
+
+Or I can select a specific item on `credentials` in my query...
+
+```js
+name: 'useObjectInQuery=>("@.publicKey")'
+```
+
+Now the argument passed will be the `publicKey` item on
+`credentials`.
+
+```js
+jseq.addCustomFns({
+  useObjectInQuery: publicKey => {
+    // do stuff with key...
+  }
+}, credentials)
 ```
 
 # JQString (Json Query Strings)
