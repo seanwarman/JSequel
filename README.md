@@ -5,8 +5,27 @@ stack.
 
 All **JSequel** does is make mysql query strings so it's also fast.
 
+## Warning
+
+**Jsequel** is still in development phase and so is not yet production ready.
+
+## Explanation
+
+If you've built an API using the [Serverless Framework](https://serverless.com/), AWS Lambda functions
+or any manage any other kind of serverless backend you'll know that updating development code is long-
+winded and very hard to debug.
+
+Lots of devs have turned to [GraphQL](https://graphql.org/) for this very reason but for
+my particular needs I thought GraphQL was a bit overkill.
+
+**JSequel** is light and fast because all it does is build mysql query strings. This means 
+it can easily be added to your project without disrupting whatever structure you've already built.
+
+You don't have to install any frontend framework and it essentially runs from a single object and a 
+schema that you define yourself.
+
 ### Select
-It allows you to build your database query in the frontend like...
+Build your database query in the frontend like...
 
 ```js
 {
@@ -22,7 +41,7 @@ It allows you to build your database query in the frontend like...
 }
 ```
 
-Which get's parsed as the following once it reaches MYSQL...
+This will get parsed as the following once it reaches MYSQL...
 
 ```sql
 SELECT
@@ -53,10 +72,24 @@ You'll notice `where` is an array. That's so we can add extra ones for multiple 
   ],
   where: [
     'firstName = "Jimmy"',
-    // ...AND
     'lastName = "Stansfield"',
   ]
 }
+```
+
+```sql
+SELECT 
+firstName,
+lastName,
+age
+
+FROM
+macDonalds.employees
+
+WHERE
+firstName = "Jimmy"
+AND
+lastName = "Stansfield"
 ```
 
 You can also put any kind of MYSQL condition inside each `where` string.
@@ -86,30 +119,43 @@ Add a `limit` array and `sort` string to the object.
 }
 ```
 
+```sql
+SELECT
+firstName,
+lastName,
+age
+
+FROM 
+macDonalds.employees
+
+LIMIT 0, 10
+ORDER BY lastName
+```
+
 Add 'desc' to the `sort` string to reverse the sorting order.
+
 ```js
 sort: 'lastName desc'
 ```
 
-### Joins
+### Joins/Subselects
 Jsequel's API is very simple because every `Object` in a query is exactly the same.
 Here are all the possible keys in a Jsequel object.
 
 ```js
 {
-  name: String,
-  columns: [Object],
-  where: [String],
-  having: [String],
-  limit: [Number,Number],
-  sort: String,
-  as: String
+  name:    String,
+  columns: [Object, ...],
+  where:   [String, ...],
+  having:  [String, ...],
+  group:   [String, ...],
+  limit:   [Number, ...],
+  sort:    String,
+  as:      String
 }
 ```
 
-The `columns` array is normally used to select which table columns you want to return
-using the `name` param but if you add another `columns` and a `where` to it you can make
-a join to another table.
+You can so a sub-select in a query object by nesting queries inside the `columns` array:
 
 ```js
 {
@@ -118,28 +164,47 @@ a join to another table.
     {name: 'firstName'},
     {name: 'lastName'},
     {
-      name: 'macDonalds.meals',
-      columns: [
+      name: 'macDonalds.meals', columns: [
         {name: 'title'},
         {name: 'price'}
       ],
-      where: ['meals.mealKey = customers.favouriteMealKey']
+      where: [ 'meals.mealKey = customers.favouriteMealKey' ]
     }
   ],
-  where: ['customers.firstName = "Bill"']
+  where: [ 'customers.firstName = "Bill"' ]
 }
 ```
 
-If you've had any experience with [serverless](https://serverless.com/) lambda functions
-you'll know that if you want more than about 20 endpoints in a project, things start to
-get pretty mad.
+```sql
+SELECT
+firstName,
+lastName,
+(SELECT title FROM macDonalds.meals WHERE meals.mealKey = customers.favouriteMealKey) AS title,
+(SELECT price FROM macDonalds.meals WHERE meals.mealKey = customers.favouriteMealKey) AS price
 
-Lots of devs have turned to [GraphQL](https://graphql.org/) for this very reason but for
-my particular needs I thought GraphQL was a bit overkill.
+FROM
+macDonalds.customers
 
-**JSequel** is light and fast because all it does is build mysql query strings. This means 
-it can easily be added to your project without disrupting whatever structure you've already built.
-It also works with a schema so it's safe as well.
+WHERE
+customers.firstName = "Bill"
+```
+
+Doing a `JOIN` in MYSQL is really useful but I decided against implementing them in JSequel.
+But before you sigh and move on to another tool, hear me out.
+
+Because they come in so many different forms (being `INNER JOIN`, `OUTER JOIN` `LEFT JOIN` 
+and `LEFT JOIN`) including all these variations would have complicated the implementation
+and so instead I opted for sub queries. 
+
+Sub-queries, I know, are slower but the advantage is that the final query has more in common 
+structurally to the JSeq query object it's built from. It also lets us do infinitely nested
+query objects, keep better track of the `AS` identifier and avoid having to alias conflicting
+table names.
+
+JSeq is desiged for quick use in the frontend of a project, allowing devs to create queires without
+having to turn to other members of the team to implement them. If you find that you need to 
+do a highly optimised `JOIN` query then it's easy enough to create a **Custom Function** to do that
+(which you can find docs for below).
 
 ## Node usage
 ```js
@@ -195,6 +260,26 @@ async function example() {
 }
 ```
 
+## Query Functions
+
+```js
+const queryObject = jseq.selectSQ()
+
+const queryObject = jseq.createSQ()
+
+const queryObject = jseq.updateSQ()
+
+const queryObject = jseq.deleteSQ()
+```
+
+```js
+queryObject = {
+  status: String,
+  errors: [String, ...],
+  query:  String
+}
+```
+
 ### Create
 If you want to make a **CREATE** just add some `data`:
 
@@ -225,6 +310,35 @@ jSeq.updateSQ({
 ```
 
 **Note**: To update a record with a NULL value assign the string 'NULL' to it.
+
+### Group By
+
+Add a `group` array for `GROUP BY` queries.
+
+```js
+jSeq.selectSQ({
+  name: 'macDonalds.payslips',
+  columns: [
+    {name: 'employeeId'}
+    {name: 'sum=>(amount)', as: 'totalPay'},
+  ],
+  group: [ 'employeeId' ]
+})
+```
+
+Will evaluate to:
+
+```sql
+SELECT
+
+employeeId,
+SUM(amount) AS totalPay
+
+FROM
+mcDonalds.employees
+
+GROUP BY employeeId
+```
 
 # Schema
 You'll need a schema for your database, this will prevent anyone from injecting dangerous

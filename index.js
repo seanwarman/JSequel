@@ -281,6 +281,10 @@ module.exports = class JsonQL {
     let where = ''
     if(col.where) where = ` WHERE ${col.where.join(' AND ')}`
 
+    let group = ''
+    if(col.group) group = ` GROUP BY ${group.join()}`
+
+
     // If we're at the last tree return the name and add an as to the
     // top level.
     if(tree[index+1] === undefined || as.length > 0) {
@@ -298,7 +302,7 @@ module.exports = class JsonQL {
     }
 
     // The other option is we keep digging...
-    return `(SELECT ${this.buildColumnsFromTree(col.columns, tree, index+1, col.name)} FROM ${name}${where}${limit}${sort})`
+    return `(SELECT ${this.buildColumnsFromTree(col.columns, tree, index+1, col.name)} FROM ${name}${where}${group}${limit}${sort})`
 
   }
 
