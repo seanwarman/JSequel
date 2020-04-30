@@ -218,21 +218,21 @@ module.exports = class JsonQL {
     let {
       db,
       table,
-      name,
-      as,
       sort,
       limit,
       where,
-      having
+      having,
+      group
     } = this.splitSelectItems(queryObj, queryObj.name)
 
     // This comes in handy.
     this.masterDbTable = `${db}.${table}`
 
-    if(limit.length > 0) limit = ` LIMIT ${limit.join()}`
     if(where.length > 0) where = ` WHERE ${where.join(' AND ')}`
+    if(group.length > 0) group = ` GROUP BY ${group.join()}`
     if(having.length > 0) having = ` HAVING ${having.join(' AND ')}`
     if(sort.length > 0) sort = ` ORDER BY ${sort}`
+    if(limit.length > 0) limit = ` LIMIT ${limit.join()}`
 
 
     // treeMap is an array of indexes showing us where everything
@@ -255,7 +255,7 @@ module.exports = class JsonQL {
 
 
     // Finally put all the columns into a master selection and return the result.
-    return `SELECT ${columns.join()} FROM ${db}.${table}${where}${having}${sort}${limit}`
+    return `SELECT ${columns.join()} FROM ${db}.${table}${where}${group}${having}${sort}${limit}`
 
 
 
@@ -907,6 +907,9 @@ module.exports = class JsonQL {
     let having = []
     if(col.having) having = col.having
 
+    let group = []
+    if(col.group) group = col.group
+
     return {
       db,
       table,
@@ -915,7 +918,8 @@ module.exports = class JsonQL {
       sort,
       limit,
       where,
-      having
+      having,
+      group
     }
 
   }
@@ -974,6 +978,7 @@ module.exports = class JsonQL {
       if(this.plainStringValid(part)) {
         valid = true;
       }
+
       //
       // TODO: decide what you should do here this validation was causing more
       // problems than it fixed but it should probably be little more rigerous than it is now.
@@ -989,6 +994,7 @@ module.exports = class JsonQL {
       //     valid = true;
       //   }
       // });
+
       if(!valid) {
         this.errors.push(part + ' didnt pass validation');
         this.fatalError = true;
