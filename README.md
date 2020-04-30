@@ -22,7 +22,7 @@ my particular needs I thought GraphQL was a bit overkill.
 it can easily be added to your project without disrupting whatever structure you've already built.
 
 You don't have to install any frontend framework and it essentially runs from a single object and a 
-schema that you define yourself.
+schema that you can define where-ever you want to.
 
 ### Select
 Build your database query in the frontend like...
@@ -140,7 +140,7 @@ sort: 'lastName desc'
 
 ### Joins/Subselects
 Jsequel's API is very simple because every `Object` in a query is exactly the same.
-Here are all the possible keys in a Jsequel object.
+Here are *all* the possible keys you can use in Jsequel.
 
 ```js
 {
@@ -155,7 +155,7 @@ Here are all the possible keys in a Jsequel object.
 }
 ```
 
-You can so a sub-select in a query object by nesting queries inside the `columns` array:
+You can do a sub-select in a query object by nesting queries inside the `columns` array:
 
 ```js
 {
@@ -190,10 +190,10 @@ customers.firstName = "Bill"
 ```
 
 Doing a `JOIN` in MYSQL is really useful but I decided against implementing them in JSequel.
-But before you sigh and move on to another tool, hear me out.
+Before you sigh and move on to another tool, hear me out.
 
-Because they come in so many different forms (being `INNER JOIN`, `OUTER JOIN` `LEFT JOIN` 
-and `LEFT JOIN`) including all these variations would have complicated the implementation
+Because they come in so many different forms (being `INNER JOIN`, `OUTER JOIN` `LEFT JOIN`,
+`RIGHT JOIN` and `CROSS JOIN`) including all these variations would have complicated the implementation
 and so instead I opted for sub queries. 
 
 Sub-queries, I know, are slower but the advantage is that the final query has more in common 
@@ -201,9 +201,9 @@ structurally to the JSeq query object it's built from. It also lets us do infini
 query objects, keep better track of the `AS` identifier and avoid having to alias conflicting
 table names.
 
-JSeq is desiged for quick use in the frontend of a project, allowing devs to create queires without
+JSeq is designed for quick use in the frontend of a project, allowing devs to create queries without
 having to turn to other members of the team to implement them. If you find that you need to 
-do a highly optimised `JOIN` query then it's easy enough to create a **Custom Function** to do that
+do a highly optimised `JOIN` query then it's easy enough to create a [Custom Function](#custom-functions) to do that
 (which you can find docs for below).
 
 ## Node usage
@@ -370,6 +370,12 @@ module.exports = {
 ```
 Any columns not included in the schema will be automatically omitted from your queries.
 
+The currently allowed `type` values are:
+
+- string
+- number
+- json
+
 # Functions
 You can use any of MYSQLs in-built functions by adding the function name to any `name` param.
 
@@ -398,8 +404,17 @@ You can nest functions inside one another.
 name: 'concat=>("Todays date: " date=>())'
 ```
 
-All function names must be preceeded by `=>()`. All arguments are 
-seperated by a single space unless inside a " string ".
+All function names must be proceeded by `=>()`. All arguments are 
+separated by a single space unless inside a " string ".
+
+### JQSString Arguments
+
+To pass a [JQString](#jqstring-json-query-strings) into a function 
+it must be passed as a string beginning with `$`.
+
+```js
+name: 'sum=>("$jsonForm[?Units].value")', as: 'totalUnits'
+```
 
 # Custom Functions
 
