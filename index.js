@@ -1,6 +1,9 @@
 module.exports = class JsonQL {
   // constructor=>
   constructor(schema) {
+
+    if(!schema) throw Error('Jseq always requires a schema object.')
+
     this.schema = schema;
     this.errors = [];
     this.fatalError = false;
@@ -25,6 +28,40 @@ module.exports = class JsonQL {
   // +~====***************====~+
   // +~====**ENTRYPOINTS**====~+
   // +~====***************====~+
+
+  async createFromSchema(oldSchema) {
+
+
+//       SELECT
+
+//       TABLE_NAME AS tableName,
+//       COLUMN_NAME AS colName,
+//       DATA_TYPE AS type,
+//       CHARACTER_MAXIMUM_LENGTH AS maxLength
+//       EXTRA AS extra
+
+//       FROM INFORMATION_SCHEMA.COLUMNS
+//       WHERE table_schema = '${dbName}'
+
+
+    let query = await this.buildSchemaQuery(oldSchema)
+
+    if(this.fatalError) {
+      return {
+        status: 'error',
+        errors: this.errors,
+        query
+      }
+    }
+
+    return {
+      status: 'success',
+      errors: this.errors,
+      query
+    }
+
+  }
+
 
   // selectSQ=>
   selectSQ(queryObj) {
@@ -206,6 +243,219 @@ module.exports = class JsonQL {
       values.push(val);
     });
     return {columns, values}
+  }
+
+  // +~====************====~+
+  // +~====**'SCHEMA'**====~+
+  // +~====************====~+
+
+  async buildSchemaQuery(fetchSchema) {
+
+    let oldSchema = await fetchSchema(`
+
+      SELECT
+
+      TABLE_NAME AS tableName,
+      COLUMN_NAME AS colName,
+      DATA_TYPE AS type,
+      CHARACTER_MAXIMUM_LENGTH AS maxLength,
+      EXTRA AS extra
+
+      FROM INFORMATION_SCHEMA.COLUMNS
+      WHERE table_schema = '${Object.keys(this.schema)[0]}'
+
+    `)
+
+    let query = []
+
+    // There'll be a query for every table item, then every 
+    // column. That way if it errors out it won't matter.
+    //
+    // Currently if anything about a column changes from
+    // how it was set before it will over-write the old column
+    // including any records it had.
+
+    // Make our jseq schema look the same as the schema that
+    // mysql returns...
+    let newSchema = this.formatJseqSchema()
+
+    // Get rid of the id colName items, this is managed by mysql
+    // automatically and will fail to delete if it's the last 
+    // column name left.
+    oldSchema = oldSchema.filter(item => item.colName !== 'id')
+
+    // The new schema shouldn't have id columns but in case
+    // it does, just filter them out.
+    newSchema = newSchema.filter(item => {
+      if(item.colName === 'id') {
+        this.errors.push('The column name "id" is reserved and has been removed from the schema query.')
+        return false
+      }
+      return true
+
+    })
+
+
+
+    // Make a simple array for new tables
+    const newTables = newSchema.reduce((arr, item) => {
+      if(arr.includes(item.tableName)) return arr
+
+      // Mysql doesn't really like table names with capitals so
+      // error out if you find any.
+      if(/[A-Z]/g.test(item.tableName)) {
+        this.fatalError = true
+        this.errors.push('Table names must contain lower-case letters only.')
+        return false
+      }
+
+      return [...arr, item.tableName]
+    }, [])
+
+    // Make a simple array for old tables
+    const oldTables = oldSchema.reduce((arr, item) => {
+      if(arr.includes(item.tableName)) return arr
+      else return [...arr, item.tableName]
+    }, [])
+
+
+    // If the item exists in new but not in old,
+    // we have to make a create table query for it.
+    //
+    // We do this first so that any new columns we
+    // create have a table to go to.
+    const createTables = newTables.reduce((arr, tableName) => {
+      if(oldTables.includes(tableName)) return arr
+      else return [ ...arr, this.createTable(tableName) ]
+    },[])
+
+
+
+    // Then we delete any columns from the old schema
+    // that don't 100% match the columns in the new schema.
+    const removeColumns = oldSchema.reduce((arr, item) => {
+
+      const newItem = newSchema.find(newItem => 
+        newItem.tableName === item.tableName &&
+        newItem.colName   === item.colName   &&
+        newItem.type      === item.type      &&
+        // The mysql schema doesn't return a maxLength for ints so if this is
+        // an int just ignore maxLength and return true
+        (newItem.type !== 'int' ? (newItem.maxLength === item.maxLength) : true) 
+      )
+
+      if(!newItem) return [ ...arr, this.deleteColumn(item)]
+
+      return arr
+
+
+    },[])
+
+
+    // Next create any columns in the new schema that
+    // don't 100% match columns in the old schema
+    const createColumns = newSchema.reduce((arr, item) => {
+
+      const oldItem = oldSchema.find(oldItem => {
+
+        return (
+          oldItem.tableName === item.tableName &&
+          oldItem.colName   === item.colName   &&
+          oldItem.type      === item.type      &&
+          // The mysql schema doesn't return a maxLength for ints so if this is
+          // an int just ignore maxLength and return true
+          (oldItem.type !== 'int' ? (oldItem.maxLength === item.maxLength) : true) 
+        )
+      })
+
+      if(!oldItem) return [ ...arr, this.createColumn(item)]
+
+      return arr
+
+    },[])
+    
+
+
+
+    // If the item exists in old but not it new
+    // we have to make a delete for it.
+    const deleteTables = oldTables.reduce((arr, tableName) => {
+      if(newTables.includes(tableName)) return arr
+      else return [ ...arr, this.delTable(tableName) ]
+    },[])
+
+
+    query = [
+      ...createTables,
+      ...removeColumns,
+      ...createColumns,
+      ...deleteTables,
+    ]
+
+
+    return query
+
+  }
+
+  deleteColumn(item) {
+    return `DELETE \`${item.colName}\` FROM \`${item.tableName}\``
+  }
+
+  createColumn(item) {
+    return `ALTER TABLE \`${item.tableName}\` ADD COLUMN \`${item.colName}\` ${ item.type === 'timestamp' ? item.type : `${item.type}(${item.maxLength})` }`
+  }
+
+  delTable(tableName) {
+    return `DROP TABLE \`${tableName}\``
+  }
+
+  createTable(tableName) {
+    return `CREATE TABLE \`${tableName}\` (\`id\` int(11) unsigned NOT NULL AUTO_INCREMENT, PRIMARY KEY (\`id\`)) ENGINE=InnoDB DEFAULT CHARSET=utf8
+    `
+  }
+
+  convertTypeToJseq(type) {
+    if(type === 'varchar') return 'string'
+    if(type === 'int') return 'number'
+    if(type === 'timestamp') return 'date'
+    return 'string'
+  }
+
+  convertTypeToSQL(type) {
+    if(type === 'string') return 'varchar'
+    if(type === 'number') return 'int'
+    if(type === 'date') return 'timestamp'
+    return 'varchar'
+
+  }
+
+  formatJseqSchema() {
+    // Get the dbName for clarity...
+    const dbName = Object.keys(this.schema)[0]
+
+    // Select it, we're only working on one db
+    // at a time...
+    const schemaDb = this.schema[dbName]
+
+    return Object.keys(schemaDb).reduce((arr, table) => {
+
+      return [...arr, ...Object.keys(schemaDb[table]).map(col => {
+        return {
+          tableName: table,
+          colName: col,
+          type: this.convertTypeToSQL((schemaDb[table][col] || {}).type),
+          maxLength: 
+          (schemaDb[table][col] || {}).type === 'date' ?
+          null
+          :
+          (schemaDb[table][col] || {}).type === 'number' ?
+          ((schemaDb[table][col] || {}).maxLength || 11)
+          :
+          ((schemaDb[table][col] || {}).maxLength || 200)
+        }
+      })]
+
+    }, [])
   }
 
   // +~====************====~+
