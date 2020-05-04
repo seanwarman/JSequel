@@ -29,22 +29,10 @@ module.exports = class JsonQL {
   // +~====**ENTRYPOINTS**====~+
   // +~====***************====~+
 
-  async createFromSchema(oldSchema) {
+  async createFromSchema(fetchSchema) {
 
 
-//       SELECT
-
-//       TABLE_NAME AS tableName,
-//       COLUMN_NAME AS colName,
-//       DATA_TYPE AS type,
-//       CHARACTER_MAXIMUM_LENGTH AS maxLength
-//       EXTRA AS extra
-
-//       FROM INFORMATION_SCHEMA.COLUMNS
-//       WHERE table_schema = '${dbName}'
-
-
-    let query = await this.buildSchemaQuery(oldSchema)
+    let query = await this.buildSchemaQuery(fetchSchema)
 
     if(this.fatalError) {
       return {
@@ -251,20 +239,27 @@ module.exports = class JsonQL {
 
   async buildSchemaQuery(fetchSchema) {
 
-    let oldSchema = await fetchSchema(`
+    let oldSchema = []
 
-      SELECT
+    if(fetchSchema) {
+      oldSchema = await fetchSchema(`
 
-      TABLE_NAME AS tableName,
-      COLUMN_NAME AS colName,
-      DATA_TYPE AS type,
-      CHARACTER_MAXIMUM_LENGTH AS maxLength,
-      EXTRA AS extra
+        SELECT
 
-      FROM INFORMATION_SCHEMA.COLUMNS
-      WHERE table_schema = '${Object.keys(this.schema)[0]}'
+        TABLE_NAME AS tableName,
+        COLUMN_NAME AS colName,
+        DATA_TYPE AS type,
+        CHARACTER_MAXIMUM_LENGTH AS maxLength,
+        IS_NULLABLE AS isNullable,
+        EXTRA AS extra
 
-    `)
+        FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE table_schema = '${Object.keys(this.schema)[0]}'
+
+      `)
+
+    }
+
 
     let query = []
 
@@ -336,9 +331,10 @@ module.exports = class JsonQL {
     const removeColumns = oldSchema.reduce((arr, item) => {
 
       const newItem = newSchema.find(newItem => 
-        newItem.tableName === item.tableName &&
-        newItem.colName   === item.colName   &&
-        newItem.type      === item.type      &&
+        newItem.tableName  === item.tableName  &&
+        newItem.colName    === item.colName    &&
+        newItem.type       === item.type       &&
+        newItem.isNullable === item.isNullable &&
         // The mysql schema doesn't return a maxLength for ints so if this is
         // an int just ignore maxLength and return true
         (newItem.type !== 'int' ? (newItem.maxLength === item.maxLength) : true) 
@@ -359,9 +355,10 @@ module.exports = class JsonQL {
       const oldItem = oldSchema.find(oldItem => {
 
         return (
-          oldItem.tableName === item.tableName &&
-          oldItem.colName   === item.colName   &&
-          oldItem.type      === item.type      &&
+          oldItem.tableName  === item.tableName  &&
+          oldItem.colName    === item.colName    &&
+          oldItem.type       === item.type       &&
+          oldItem.isNullable === item.isNullable &&
           // The mysql schema doesn't return a maxLength for ints so if this is
           // an int just ignore maxLength and return true
           (oldItem.type !== 'int' ? (oldItem.maxLength === item.maxLength) : true) 
@@ -397,27 +394,69 @@ module.exports = class JsonQL {
 
   }
 
-  deleteColumn(item) {
-    return `DELETE \`${item.colName}\` FROM \`${item.tableName}\``
+
+  dateColumn(item) {
+
+    const required = item.isNullable === 'NO' ? ' NOT NULL' : ' DEFAULT NULL'
+
+    if(!item.default) {
+      return `ALTER TABLE \`${item.tableName}\` ADD COLUMN \`${item.colName}\` ${item.type}${required}`
+    }
+
+    if(item.default === 'update') {
+      return `ALTER TABLE \`${item.tableName}\` ADD COLUMN \`${item.colName}\` ${item.type} NOT NULL DEFAULT CURRENT_TIMESTAMP on update CURRENT_TIMESTAMP`
+    }
+
+    if(item.default === 'create') {
+      return `ALTER TABLE \`${item.tableName}\` ADD COLUMN \`${item.colName}\` ${item.type} NOT NULL DEFAULT CURRENT_TIMESTAMP`
+    }
   }
 
-  createColumn(item) {
-    return `ALTER TABLE \`${item.tableName}\` ADD COLUMN \`${item.colName}\` ${ item.type === 'timestamp' ? item.type : `${item.type}(${item.maxLength})` }`
+
+  deleteColumn(item) {
+    return `ALTER TABLE \`${item.tableName}\` DROP COLUMN \`${item.colName}\``
   }
+
+
+  createColumn(item) {
+
+    const required = item.isNullable === 'NO' ? ' NOT NULL' : ' DEFAULT NULL'
+
+    if(item.type === 'timestamp') {
+      return this.dateColumn(item)
+
+    }
+
+    // Not sure you can make json columns NOT NULL
+    if(item.type === 'json') {
+      return `ALTER TABLE \`${item.tableName}\` ADD COLUMN (\`${item.colName}\` json)`
+
+    }
+
+    if(item.type === 'int') {
+      return `ALTER TABLE \`${item.tableName}\` ADD COLUMN \`${item.colName}\` ${item.type}(${item.maxLength ? item.maxLength : '11'})${required}`
+
+    }
+
+    return `ALTER TABLE \`${item.tableName}\` ADD COLUMN \`${item.colName}\` ${item.type}(${item.maxLength})${required}`
+  }
+
 
   delTable(tableName) {
     return `DROP TABLE \`${tableName}\``
   }
 
+
   createTable(tableName) {
-    return `CREATE TABLE \`${tableName}\` (\`id\` int(11) unsigned NOT NULL AUTO_INCREMENT, PRIMARY KEY (\`id\`)) ENGINE=InnoDB DEFAULT CHARSET=utf8
-    `
+    return `CREATE TABLE \`${tableName}\` (\`id\` int(11) unsigned NOT NULL AUTO_INCREMENT, PRIMARY KEY (\`id\`)) ENGINE=InnoDB DEFAULT CHARSET=utf8`
   }
+
 
   convertTypeToJseq(type) {
     if(type === 'varchar') return 'string'
     if(type === 'int') return 'number'
     if(type === 'timestamp') return 'date'
+    if(type === 'json') return 'json'
     return 'string'
   }
 
@@ -425,6 +464,7 @@ module.exports = class JsonQL {
     if(type === 'string') return 'varchar'
     if(type === 'number') return 'int'
     if(type === 'date') return 'timestamp'
+    if(type === 'json') return 'json'
     return 'varchar'
 
   }
@@ -439,19 +479,37 @@ module.exports = class JsonQL {
 
     return Object.keys(schemaDb).reduce((arr, table) => {
 
+
       return [...arr, ...Object.keys(schemaDb[table]).map(col => {
-        return {
-          tableName: table,
-          colName: col,
-          type: this.convertTypeToSQL((schemaDb[table][col] || {}).type),
-          maxLength: 
-          (schemaDb[table][col] || {}).type === 'date' ?
+
+        // Convert all the jseq schema keys and values into their equivelent
+        // mysql information schema keys and values.
+
+        const type = this.convertTypeToSQL((schemaDb[table][col] || {}).type)
+
+        const maxLength = 
+          type === 'date' ? 
+          null 
+          : 
+          type === 'json' ?
           null
           :
-          (schemaDb[table][col] || {}).type === 'number' ?
+          type === 'number' ? 
           ((schemaDb[table][col] || {}).maxLength || 11)
           :
           ((schemaDb[table][col] || {}).maxLength || 200)
+
+        const isNullable = (schemaDb[table][col] || {}).required ? 'NO' : 'YES'
+
+        const deflt = (schemaDb[table][col] || {}).default
+
+        return {
+          tableName: table,
+          colName: col,
+          type,
+          maxLength,
+          isNullable,
+          default: deflt
         }
       })]
 

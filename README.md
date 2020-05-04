@@ -375,6 +375,9 @@ The currently allowed `type` values are:
 - string
 - number
 - json
+- date
+
+There's a few things the schema is capable of doing. See [Jseq Schema](#jseq-schema)
 
 # Functions
 You can use any of MYSQLs in-built functions by adding the function name to any `name` param.
@@ -694,6 +697,12 @@ When using nested jsons you must stick to more mongo-like results. So rather tha
 doing mysql joins and having data from associate tables included in your results
 you'll have to instead nest the results of associated tables.
 
+**Note**: You cannot currently `limit` or `sort` nested jsons due to limitations
+in mysql. Also note that any version before mysql 8.0 will replace duplicate keys
+giving priority to the *first* key name it finds, unlike javascript.
+See [here](https://dev.mysql.com/doc/refman/5.7/en/json.html#json-normalization)
+for reference.
+
 # Example
 This is how I currently use JSequel with a frontend app project. 
 
@@ -733,9 +742,134 @@ const queryObj = decodeURIComponent(JSON.stringify({
 const employees = await axios.get(`/jseq/${queryObj}`);
 ```
 
+# Jseq Schema
 
-**Note**: You cannot currently `limit` or `sort` nested jsons due to limitations
-in mysql. Also note that any version before mysql 8.0 will replace duplicate keys
-giving priority to the *first* key name it finds, unlike javascript.
-See [here](https://dev.mysql.com/doc/refman/5.7/en/json.html#json-normalization)
-for reference.
+You can use the schema to create the db structure for you.
+
+Here's an example schema:
+
+```js
+const schema = {
+  macDonalds: {
+    customers: {
+      firstName: {
+        type: 'string'
+      },
+      lastName: {
+        type: 'string'
+      },
+      created: {
+        type: 'date',
+        default: 'create'
+      }
+    }
+  }
+}
+```
+
+You can store any number of databases in a schema just as long as they are all
+under the same host, password and user.
+
+The structure goes:
+
+```js
+databaseName: {
+  tableName: {
+    columnName: params
+  }
+}
+```
+
+Where `params` accepts the following key values.
+
+```js
+const params = {
+  type: String,         // required, one of 'string' 'number' 'json' 'date'
+  required: Bool,       // optional, one of true false
+  maxLength: Number,    // optional, only applies to 'string' and 'number' types
+  default: String,      // optional, only applies to 'date', one of 'update' 'create'
+}
+```
+
+Adding `default: 'update'` to a `type: 'date'` will auto update the date on update,
+adding `default: 'create'` will only make a date on the record's creation.
+
+Every jseq database will automatically get an `id` column added to it's table
+which will self increment. If you want to make a more unique key it's easy enough
+to add a `type: 'string'` and update each record with an id type of your choice.
+
+## createFromSchema
+
+If I already have a database named `macDonalds` Jseq can build the schema
+for my database using my json schema with it's `createFromSchema` function.
+
+```js
+const jseq = new JSequel(schema)
+
+// createFromSchema returns a promise so it has to be awaited.
+const queryObj = await jseq.createFromSchema()
+
+```
+
+The `queryObj` will return a `query` param like normal except this time
+it'll be an array of queries. Run these through your chosen mysql library
+and each query will update the db schema to match your json schema.
+
+```js
+console.log(queryObj)
+// { status: 'success', query: [
+//   'CREATE TABLE `configs` (`id` int(11) unsigned NOT NULL AUTO_INCREMENT, PRIMARY KEY (`id`)) ENGINE=InnoDB DEFAULT CHARSET=utf8',
+//   'ALTER TABLE `configs` ADD COLUMN `host` varchar(200) NOT NULL',
+//   'ALTER TABLE `configs` ADD COLUMN `user` varchar(200) NOT NULL',
+//   'ALTER TABLE `configs` ADD COLUMN `password` varchar(200) NOT NULL',
+//   'ALTER TABLE `configs` ADD COLUMN `port` varchar(200) NOT NULL',
+//   'ALTER TABLE `configs` ADD COLUMN `database` varchar(200) NOT NULL',
+//   'ALTER TABLE `configs` ADD COLUMN (`dbSchema` json)'
+// ]}
+```
+
+Optionally you can also update your existing schema by passing a callback function
+to `createFromSchema`.
+
+```js
+const queryObj = await jseq.createFromSchema(async(schemaQuery) => {
+
+  // Use any mysql library you want. I'm using mysql2 here.
+  const con = await mysql.createPool({...connection, connectionLimit: 900})
+
+  let result
+
+  // First you'll have to query your existing db to provide jseq with
+  // it's structure.
+
+  // schemaQuery is the provided query you'll need to produce the
+  // right format for jseq.
+
+  try {
+
+    result = await con.query(schemaQuery)
+
+  } catch (err) {
+
+    console.log(err)
+    await con.end()
+
+    return
+  }
+
+  // Once it's done just return the result.
+  return result[0]
+
+})
+```
+
+**Warning** The above method is not safe for databases that are already in production, 
+JSeqeul massively simplifies a mysql database to include the most useful column types
+and presets many of the more nuanced functionality in mysql.
+
+It is best to only update an existing schema if it is already being fully
+managed by JSeq rather than updating the schema for a manually managed database.
+
+It is not yet possible to change the values of a column using JSequel without
+erasing the contents of that column so it's best to only use this functionality
+when you want to build the initial structure of your database.
