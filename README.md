@@ -784,19 +784,20 @@ Where `params` accepts the following key values.
 
 ```js
 const params = {
-  type: String,         // required, one of 'string' 'number' 'json' 'date'
-  required: Bool,       // optional, one of true false
-  maxLength: Number,    // optional, only applies to 'string' and 'number' types
-  default: String,      // optional, only applies to 'date', one of 'update' 'create'
-}
+  type:      String,    // Required, one of 'string' 'number' 'json' 'date'
+  primary:   Bool,      // Must be set to one column in every table.
+  required:  Bool,      // Optional, one of true false
+  maxLength: Number,    // Optional, only applies to 'string' and 'number' types
+  default:   String     // Optional, for dates this can be 'create' or 'update'.
+}                       // For the primary column it can be set to 'auto'
+                        // default also accepts any mysql value compatible with
+                        // DEFAULT.
 ```
 
-Adding `default: 'update'` to a `type: 'date'` will auto update the date on update,
-adding `default: 'create'` will only make a date on the record's creation.
-
-Every jseq database will automatically get an `id` column added to it's table
-which will self increment. If you want to make a more unique key it's easy enough
-to add a `type: 'string'` and update each record with an id type of your choice.
+Adding `default: 'update'` to a `type: 'date'` will auto update the date on update.
+Adding `default: 'create'` will only make a date on the record's creation.
+Adding `default: 'auto'` will auto-increment the `primary` value. Currently it's
+only compatible with the `primary` column and only if it's a `type: 'number'`.
 
 ## createFromSchema
 
@@ -816,16 +817,27 @@ it'll be an array of queries. Run these through your chosen mysql library
 and each query will update the db schema to match your json schema.
 
 ```js
-console.log(queryObj)
-// { status: 'success', query: [
-//   'CREATE TABLE `configs` (`id` int(11) unsigned NOT NULL AUTO_INCREMENT, PRIMARY KEY (`id`)) ENGINE=InnoDB DEFAULT CHARSET=utf8',
-//   'ALTER TABLE `configs` ADD COLUMN `host` varchar(200) NOT NULL',
-//   'ALTER TABLE `configs` ADD COLUMN `user` varchar(200) NOT NULL',
-//   'ALTER TABLE `configs` ADD COLUMN `password` varchar(200) NOT NULL',
-//   'ALTER TABLE `configs` ADD COLUMN `port` varchar(200) NOT NULL',
-//   'ALTER TABLE `configs` ADD COLUMN `database` varchar(200) NOT NULL',
-//   'ALTER TABLE `configs` ADD COLUMN (`dbSchema` json)'
-// ]}
+queryObj.query = [
+  `CREATE TABLE coolnewtable (
+
+    id int(11) NOT NULL PRIMARY KEY AUTO_INCREMENT,
+    thing int(11)
+
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8'`,
+
+  `CREATE TABLE configs (
+
+    id int(11) NOT NULL PRIMARY KEY,
+    host varchar(200) NOT NULL,
+    user varchar(200) NOT NULL,
+    password varchar(200) NOT NULL,
+    port varchar(200) NOT NULL,
+    database varchar(200) NOT NULL,
+    dbSchema json,
+    userId int(11) NOT NULL
+
+   ) ENGINE=InnoDB DEFAULT CHARSET=utf8`
+]
 ```
 
 Optionally you can also update your existing schema by passing a callback function
@@ -870,6 +882,13 @@ and presets many of the more nuanced functionality in mysql.
 It is best to only update an existing schema if it is already being fully
 managed by JSeq rather than updating the schema for a manually managed database.
 
-It is not yet possible to change the values of a column using JSequel without
-erasing the contents of that column so it's best to only use this functionality
-when you want to build the initial structure of your database.
+If you want to change only the name of a column it is not possible using this method.
+
+Jseqeul has no way to identify items in the schema without checking against the column
+name and table name combination so if you where to change the table name Jseq would
+just think you where making a new column and will delete the old one including all it's
+contents.
+
+In future I would like to make this functionality more comprehensive
+but for now it's best to use this feature as a quick way to build the initial structure
+of your database rather than fully managing it.

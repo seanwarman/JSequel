@@ -2,7 +2,7 @@ module.exports = class JsonQL {
   // constructor=>
   constructor(schema) {
 
-    if(!schema) throw Error('Jseq always requires a schema object.')
+    this.checkSchemaForIds(schema)
 
     this.schema = schema;
     this.errors = [];
@@ -17,6 +17,43 @@ module.exports = class JsonQL {
     this.customObj = {};
     this.nestedAS = '';
     this.nestedAsNames = [];
+  }
+
+  checkSchemaForIds(schema) {
+    if(!schema) throw Error('Jseq always requires a schema object.')
+
+    const dbs = Object.keys(schema).map(key => key)
+
+    if(dbs.length === 0) return
+
+    dbs.forEach(dbName => {
+
+      const tables = Object.keys(schema[dbName]).map(key => key)
+
+      if(tables.length === 0) return
+
+
+      tables.forEach(tableName => {
+
+        const columns = Object.keys(schema[dbName][tableName]).map(key => key)
+
+        let count = 0
+
+        columns.forEach(colName => {
+
+          if(schema[dbName][tableName][colName].primary) count++
+
+        })
+
+        if(count !== 1) throw Error('Every table in a jseq schema must have a single column with primary set to true')
+
+
+      })
+
+    })
+
+    console.log('Schema check succeeded!')
+
   }
 
   // addCustomFns=>
@@ -249,8 +286,10 @@ module.exports = class JsonQL {
         TABLE_NAME AS tableName,
         COLUMN_NAME AS colName,
         DATA_TYPE AS type,
+        COLUMN_TYPE AS longType,
         CHARACTER_MAXIMUM_LENGTH AS maxLength,
         IS_NULLABLE AS isNullable,
+        COLUMN_KEY AS columnKey,
         EXTRA AS extra
 
         FROM INFORMATION_SCHEMA.COLUMNS
@@ -258,199 +297,240 @@ module.exports = class JsonQL {
 
       `)
 
+      oldSchema = this.convertIntLengths(oldSchema)
     }
 
 
     let query = []
 
-    // There'll be a query for every table item, then every 
-    // column. That way if it errors out it won't matter.
-    //
-    // Currently if anything about a column changes from
-    // how it was set before it will over-write the old column
-    // including any records it had.
-
-    // Make our jseq schema look the same as the schema that
-    // mysql returns...
     let newSchema = this.formatJseqSchema()
 
-    // Get rid of the id colName items, this is managed by mysql
-    // automatically and will fail to delete if it's the last 
-    // column name left.
-    oldSchema = oldSchema.filter(item => item.colName !== 'id')
+    const deletes = this.deleteFromOldSchema(oldSchema, newSchema)
+    console.log('deletes : ', deletes)
 
-    // The new schema shouldn't have id columns but in case
-    // it does, just filter them out.
-    newSchema = newSchema.filter(item => {
-      if(item.colName === 'id') {
-        this.errors.push('The column name "id" is reserved and has been removed from the schema query.')
-        return false
-      }
-      return true
-
-    })
+    const updates = this.updateFromNewSchema(newSchema, oldSchema)
+    console.log('updates : ', updates)
 
 
 
-    // Make a simple array for new tables
-    const newTables = newSchema.reduce((arr, item) => {
-      if(arr.includes(item.tableName)) return arr
-
-      // Mysql doesn't really like table names with capitals so
-      // error out if you find any.
-      if(/[A-Z]/g.test(item.tableName)) {
-        this.fatalError = true
-        this.errors.push('Table names must contain lower-case letters only.')
-        return false
-      }
-
-      return [...arr, item.tableName]
-    }, [])
-
-    // Make a simple array for old tables
-    const oldTables = oldSchema.reduce((arr, item) => {
-      if(arr.includes(item.tableName)) return arr
-      else return [...arr, item.tableName]
-    }, [])
 
 
-    // If the item exists in new but not in old,
-    // we have to make a create table query for it.
-    //
-    // We do this first so that any new columns we
-    // create have a table to go to.
-    const createTables = newTables.reduce((arr, tableName) => {
-      if(oldTables.includes(tableName)) return arr
-      else return [ ...arr, this.createTable(tableName) ]
-    },[])
-
-
-
-    // Then we delete any columns from the old schema
-    // that don't 100% match the columns in the new schema.
-    const removeColumns = oldSchema.reduce((arr, item) => {
-
-      const newItem = newSchema.find(newItem => 
-        newItem.tableName  === item.tableName  &&
-        newItem.colName    === item.colName    &&
-        newItem.type       === item.type       &&
-        newItem.isNullable === item.isNullable &&
-        // The mysql schema doesn't return a maxLength for ints so if this is
-        // an int just ignore maxLength and return true
-        (newItem.type !== 'int' ? (newItem.maxLength === item.maxLength) : true) 
-      )
-
-      if(!newItem) return [ ...arr, this.deleteColumn(item)]
-
-      return arr
-
-
-    },[])
-
-
-    // Next create any columns in the new schema that
-    // don't 100% match columns in the old schema
-    const createColumns = newSchema.reduce((arr, item) => {
-
-      const oldItem = oldSchema.find(oldItem => {
-
-        return (
-          oldItem.tableName  === item.tableName  &&
-          oldItem.colName    === item.colName    &&
-          oldItem.type       === item.type       &&
-          oldItem.isNullable === item.isNullable &&
-          // The mysql schema doesn't return a maxLength for ints so if this is
-          // an int just ignore maxLength and return true
-          (oldItem.type !== 'int' ? (oldItem.maxLength === item.maxLength) : true) 
-        )
-      })
-
-      if(!oldItem) return [ ...arr, this.createColumn(item)]
-
-      return arr
-
-    },[])
-    
-
-
-
-    // If the item exists in old but not it new
-    // we have to make a delete for it.
-    const deleteTables = oldTables.reduce((arr, tableName) => {
-      if(newTables.includes(tableName)) return arr
-      else return [ ...arr, this.delTable(tableName) ]
-    },[])
-
-
-    query = [
-      ...createTables,
-      ...removeColumns,
-      ...createColumns,
-      ...deleteTables,
+    return [
+      ...deletes,
+      ...updates
     ]
 
+  }
+
+  convertIntLengths(schema) {
+    return schema.map(item => {
+      if(item.type === 'int') {
+
+        const start = item.longType.indexOf('(') + 1
+        const end = item.longType.indexOf(')')
+        item.maxLength = Number(item.longType.slice(start, end))
+
+      }
+      return item
+    })
+  }
+
+  updateFromNewSchema(newSchema, oldSchema) {
+
+    let query = []
+
+    let alreadyCreated = []
+    let droppedPrimary = []
+
+    newSchema.forEach(item => {
+
+      // Find any tables the old schema doesn't have...
+      const tableItem = oldSchema.find(oldItm =>
+        item.tableName === oldItm.tableName
+      )
+
+      // If this item's table has already been created, so
+      // have all the columns so ignore this item
+      if(alreadyCreated.includes(item.tableName)) return
+
+      // If the old schema doesn't have this table and we haven't already made
+      // a create query for it, make one now...
+      if(tableItem === undefined) {
+
+        // Create that table with all cols
+        // Grab all the newSchema items for this table
+        const items = newSchema.filter(it => it.tableName === item.tableName)
+        query.push(this.createTable(items))
+
+        // Make a note of the created table
+        alreadyCreated.push(item.tableName)
+
+        return
+      }
+
+      // Now this item is definitely a table that the
+      // old schema already has.
+      // Find any columns the oldSchema doesn't have...
+      const columnItem = oldSchema.find(oldItm =>
+        item.tableName === oldItm.tableName &&
+        item.colName   === oldItm.colName
+      )
+
+      // If we didn't find this tableName and colName
+      // combination in the oldSchema then this column
+      // needs to be created.
+      if(columnItem === undefined) {
+        // Alter table and ADD COLUMN
+        query.push(this.addColumn(item))
+        return
+      }
+
+      // This colName and tableName combination is in the oldSchema
+      // so now we need to check to see if any of the other parameters
+      // are different.
+      // We can use the columnItem we found in the previous step.
+
+      // console.log('old columnItem: ', columnItem)
+
+      // console.log('new columnItem: ', item)
+
+      const type       = columnItem.type       !== item.type
+      const maxLength  = columnItem.maxLength  !== item.maxLength
+      const isNullable = columnItem.isNullable !== item.isNullable
+      const columnKey  = columnItem.columnKey  !== item.columnKey
+      const extra      = columnItem.extra      !== item.extra
+      const deflt      = columnItem.default    !== item.default
+
+      // If any of the columns have changed...
+      if(type || maxLength || isNullable || columnKey || extra || deflt) {
+
+
+        // First check to see if the primary key has changed
+        if(columnKey) {
+
+          // Drop the existing primary key, which is thankfully very easy
+          query.push(this.dropPrimary(item))
+
+        }
+
+        // Then the rest can all be modified at once...
+        query.push(this.modColumn(item))
+
+
+      }
+
+    })
 
     return query
 
   }
 
+  deleteFromOldSchema(oldSchema, newSchema) {
+    let query = []
+    let alreadyDeleted = []
 
-  dateColumn(item) {
+    // We only need to delete items from the old schema where the 
+    // tableName or the colName can't be found in the new schema.
+    oldSchema.forEach(item => {
 
-    const required = item.isNullable === 'NO' ? ' NOT NULL' : ' DEFAULT NULL'
+      const tableItem = newSchema.find(newItm =>
+        item.tableName === newItm.tableName
+      )
 
-    if(!item.default) {
-      return `ALTER TABLE \`${item.tableName}\` ADD COLUMN \`${item.colName}\` ${item.type}${required}`
-    }
+      // If this table has already been deleted ignore this item.
+      if(alreadyDeleted.includes(item.tableName)) return
 
-    if(item.default === 'update') {
-      return `ALTER TABLE \`${item.tableName}\` ADD COLUMN \`${item.colName}\` ${item.type} NOT NULL DEFAULT CURRENT_TIMESTAMP on update CURRENT_TIMESTAMP`
-    }
+      if(tableItem === undefined) {
 
-    if(item.default === 'create') {
-      return `ALTER TABLE \`${item.tableName}\` ADD COLUMN \`${item.colName}\` ${item.type} NOT NULL DEFAULT CURRENT_TIMESTAMP`
-    }
+        // We need to delete this table
+        query.push(this.delTable(item))
+        alreadyDeleted.push(item.tableName)
+
+        return
+      }
+
+      const columnItem = newSchema.find(newItm =>
+        item.tableName === newItm.tableName &&
+        item.colName   === newItm.colName
+      )
+
+
+      if(columnItem === undefined) {
+        // We need to delete this column
+        query.push(this.deleteColumn(item))
+        return
+      }
+
+    })
+
+
+    return query
   }
 
+
+  delTable(item) {
+    return `DROP TABLE \`${item.tableName}\``
+  }
 
   deleteColumn(item) {
     return `ALTER TABLE \`${item.tableName}\` DROP COLUMN \`${item.colName}\``
   }
 
-
-  createColumn(item) {
-
-    const required = item.isNullable === 'NO' ? ' NOT NULL' : ' DEFAULT NULL'
-
-    if(item.type === 'timestamp') {
-      return this.dateColumn(item)
-
-    }
-
-    // Not sure you can make json columns NOT NULL
-    if(item.type === 'json') {
-      return `ALTER TABLE \`${item.tableName}\` ADD COLUMN (\`${item.colName}\` json)`
-
-    }
-
-    if(item.type === 'int') {
-      return `ALTER TABLE \`${item.tableName}\` ADD COLUMN \`${item.colName}\` ${item.type}(${item.maxLength ? item.maxLength : '11'})${required}`
-
-    }
-
-    return `ALTER TABLE \`${item.tableName}\` ADD COLUMN \`${item.colName}\` ${item.type}(${item.maxLength})${required}`
+  columnConditions(item) {
+    return `\`${item.colName}\` ${item.type}${
+      item.maxLength ?
+      `(${item.maxLength})`
+      :
+      item.type === 'int' ?
+      '(11)'
+      :
+      item.type === 'varchar' ?
+      '(200)'
+      :
+      ''
+    }${
+      item.isNullable === 'NO'             ? ' NOT NULL'       : ''
+    }${
+      item.columnKey  === 'PRI'            ? ' PRIMARY KEY'    : ''
+    }${
+      item.default ? ` DEFAULT ${item.default}` : ''
+    }${
+      item.extra === 'auto_increment' ? 
+      ' AUTO_INCREMENT' 
+      :
+      item.extra === 'on update CURRENT_TIMESTAMP' ? 
+      ' on update CURRENT_TIMESTAMP'
+      :
+      ''
+    }`
   }
 
+ //  colName: 'userId',
+ //  type: 'int',
+ //  maxLength: 200,
+ //  isNullable: 'NO',
+ //  columnKey: '',
+ //  default: undefined
 
-  delTable(tableName) {
-    return `DROP TABLE \`${tableName}\``
+  dropPrimary(item) {
+    return `ALTER TABLE ${item.tableName} DROP PRIMARY KEY`
   }
 
-
-  createTable(tableName) {
-    return `CREATE TABLE \`${tableName}\` (\`id\` int(11) unsigned NOT NULL AUTO_INCREMENT, PRIMARY KEY (\`id\`)) ENGINE=InnoDB DEFAULT CHARSET=utf8`
+  modColumn(item) {
+    return `ALTER TABLE \`${item.tableName}\` MODIFY ${this.columnConditions(item)}`
   }
 
+  addColumn(item) {
+    return `ALTER TABLE \`${item.tableName}\` ADD COLUMN ${this.columnConditions(item)}`
+  }
+
+  createTable(items) {
+    return `CREATE TABLE \`${items[0].tableName}\` (
+      ${items.map(it => (
+        this.columnConditions(it)
+      )).join()}
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8`
+  }
 
   convertTypeToJseq(type) {
     if(type === 'varchar') return 'string'
@@ -485,23 +565,54 @@ module.exports = class JsonQL {
         // Convert all the jseq schema keys and values into their equivelent
         // mysql information schema keys and values.
 
-        const type = this.convertTypeToSQL((schemaDb[table][col] || {}).type)
+        const column = schemaDb[table][col]
+
+        const type = this.convertTypeToSQL(column.type)
 
         const maxLength = 
-          type === 'date' ? 
+          column.type === 'date' ? 
           null 
           : 
-          type === 'json' ?
+          column.type === 'json' ?
           null
           :
-          type === 'number' ? 
-          ((schemaDb[table][col] || {}).maxLength || 11)
+          column.type === 'number' ? 
+          (column.maxLength || 11)
           :
-          ((schemaDb[table][col] || {}).maxLength || 200)
+          (column.maxLength || 200)
 
-        const isNullable = (schemaDb[table][col] || {}).required ? 'NO' : 'YES'
+        const deflt = 
+          column.default === 'create' ?
+          'CURRENT_TIMESTAMP'
+          :
+          column.default === 'update' ?
+          'CURRENT_TIMESTAMP'
+          :
+          column.default === 'auto' ?
+          ''
+          :
+          column.default ? `${column.default}` : undefined
+          
+        const extra =
+          column.default === 'update' ?
+          'on update CURRENT_TIMESTAMP'
+          :
+          column.default === 'auto' ?
+          'auto_increment'
+          :
+          ''
 
-        const deflt = (schemaDb[table][col] || {}).default
+
+
+
+        const columnKey = column.primary ? 'PRI' : ''
+
+        const isNullable = 
+          column.primary  ? 'NO'
+          :
+          column.required ? 'NO' 
+          : 
+          'YES'
 
         return {
           tableName: table,
@@ -509,6 +620,8 @@ module.exports = class JsonQL {
           type,
           maxLength,
           isNullable,
+          columnKey,
+          extra,
           default: deflt
         }
       })]
