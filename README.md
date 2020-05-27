@@ -1,6 +1,9 @@
-# JSequel
-A small framework for controlling your API endpoints from the frontend. Much
-like GraphQL but lighter and less obtrusive to your already complicated
+![Fast Food](./cover-smaller.png)
+
+A framework for doing fast(-food) takeouts from your database. Set up five
+general purpose endpoints and go. 
+
+Much like GraphQL but lighter and less obtrusive to your already complicated
 stack. 
 
 All **JSequel** does is make mysql query strings so it's also fast.
