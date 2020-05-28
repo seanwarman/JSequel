@@ -1,4 +1,4 @@
-![Fast Food](./cover-smaller.png)
+![Fast Food](./default.png)
 
 A framework for doing fast(-food) takeouts from your database. Set up five
 general purpose endpoints and go. 
