@@ -1,5 +1,4 @@
 module.exports = class JsonQL {
-  // constructor=>
   constructor(schema) {
 
     this.checkSchemaForIds(schema)
@@ -52,8 +51,6 @@ module.exports = class JsonQL {
 
     })
 
-    console.log('Schema check succeeded!')
-
   }
 
   // addCustomFns=>
@@ -88,13 +85,12 @@ module.exports = class JsonQL {
   }
 
 
-  // selectSQ=>
   selectSQ(queryObj) {
     let query = ''
     let treeMap = []
 
     // If the `name` has a custom function return that only.
-    if(/^\w+\=\>/.test(queryObj.name)) {
+    if(/^\w+=>/.test(queryObj.name)) {
 
       query = this.funcString(queryObj.name)
 
@@ -120,7 +116,6 @@ module.exports = class JsonQL {
     }
   }
 
-  // createSQ=>
   createSQ(queryObj, data) {
     let query = ''
 
@@ -149,7 +144,6 @@ module.exports = class JsonQL {
       query
     }
   }
-  // updateSQ=>
   updateSQ(queryObj, data) {
     let query = ''
 
@@ -176,7 +170,6 @@ module.exports = class JsonQL {
       query
     }
   }
-  // deleteSQ=>
   deleteSQ(queryObj) {
     let query = ''
 
@@ -209,7 +202,6 @@ module.exports = class JsonQL {
   // +~====**DATA**====~+
   // +~====********====~+
 
-  // setValueString=>
   setValueString(value) {
     if(!value) return null;
     if(typeof value === 'object' && value.forEach) {
@@ -232,7 +224,6 @@ module.exports = class JsonQL {
     }
   }
 
-  // setJQString=>
   setJQString(db, table, key, value) {
     if(!value) return;
     let column = this.extractColFromJQString(db, table, key);
@@ -246,7 +237,6 @@ module.exports = class JsonQL {
     return {column, value};
   }
 
-  // parseData=>
   parseData(db, table, data) {
     let values = [];
     let columns = [];
@@ -311,10 +301,6 @@ module.exports = class JsonQL {
     const updates = this.updateFromNewSchema(newSchema, oldSchema)
     console.log('updates : ', updates)
 
-
-
-
-
     return [
       ...deletes,
       ...updates
@@ -340,7 +326,6 @@ module.exports = class JsonQL {
     let query = []
 
     let alreadyCreated = []
-    let droppedPrimary = []
 
     newSchema.forEach(item => {
 
@@ -632,8 +617,6 @@ module.exports = class JsonQL {
   // +~====************====~+
   // +~====**'SELECT'**====~+
   // +~====************====~+
-
-  // buildSelect=>
   buildSelect(queryObj, treeMap) {
 
     let {
@@ -649,11 +632,11 @@ module.exports = class JsonQL {
     // This comes in handy.
     this.masterDbTable = `${db}.${table}`
 
-    if(where.length > 0) where = ` WHERE ${where.join(' AND ')}`
-    if(group.length > 0) group = ` GROUP BY ${group.join()}`
-    if(having.length > 0) having = ` HAVING ${having.join(' AND ')}`
-    if(sort.length > 0) sort = ` ORDER BY ${sort}`
-    if(limit.length > 0) limit = ` LIMIT ${limit.join()}`
+    if(where.length > 0) where   = this.setStringArray('where', queryObj, ' WHERE ')
+    if(group.length > 0) group   = this.setStringArray('group', queryObj, ' GROUP BY ')
+    if(having.length > 0) having = this.setStringArray('having', queryObj, ' HAVING ')
+    if(sort.length > 0) sort     = this.setString(sort, ' ORDER BY ')
+    if(limit.length > 0) limit   = this.setLimitString(limit)
 
 
     // treeMap is an array of indexes showing us where everything
@@ -674,15 +657,16 @@ module.exports = class JsonQL {
 
     }, [])
 
+    if(columns.length === 0) {
+      this.fatalError = true
+      this.errors.push('There must be at least one valid column in a JSeq select.')
+    }
 
     // Finally put all the columns into a master selection and return the result.
     return `SELECT ${columns.join()} FROM ${db}.${table}${where}${group}${having}${sort}${limit}`
 
-
-
   }
 
-  // buildColumnsFromTree=>
   buildColumnsFromTree(columns, tree, index = 0, prevDbTable = this.masterDbTable) {
 
     const col = columns[tree[index]]
@@ -691,19 +675,19 @@ module.exports = class JsonQL {
     if(col.name) name = col.name
 
     let as = ''
-    if(col.as) as = ` AS ${col.as}`
+    if(col.as) as = this.setString(col.as, ' AS ')
 
     let sort = ''
-    if(col.sort) sort = ` ORDER BY ${col.sort}`
+    if(col.sort) sort = this.setString(col.sort, ' ORDER BY ')
 
     let limit = ''
-    if(col.limit) limit = ` LIMIT ${col.limit.join()}`
+    if(col.limit) limit = this.setLimitString(col.limit)
 
     let where = ''
-    if(col.where) where = ` WHERE ${col.where.join(' AND ')}`
+    if(col.where) where = this.setStringArray('where', col, ' WHERE ')
 
     let group = ''
-    if(col.group) group = ` GROUP BY ${group.join()}`
+    if(col.group) group = this.setStringArray('group', col, ' GROUP BY ')
 
 
     // If we're at the last tree return the name and add an as to the
@@ -731,7 +715,6 @@ module.exports = class JsonQL {
   // +~====**'CREATE'**====~+
   // +~====************====~+
 
-  // buildCreate=>
   buildCreate(queryObj, data) {
 
     const {db, table} = this.splitDbAndTableNames(queryObj.name);
@@ -760,7 +743,6 @@ module.exports = class JsonQL {
   // +~====**'UPDATE'**====~+
   // +~====************====~+
 
-  // buildUpdate=>
   buildUpdate(queryObj, data) {
 
     const {db, table} = this.splitDbAndTableNames(queryObj.name);
@@ -788,7 +770,7 @@ module.exports = class JsonQL {
       this.errors.push('No where condition provided. You cannot update all records in the table at once.');
     }
 
-    let where = this.setWhString(queryObj, ' WHERE ');
+    let where = this.setStringArray('where', queryObj, ' WHERE ');
 
     return `${update}${set}${where}`;
   }
@@ -797,7 +779,6 @@ module.exports = class JsonQL {
   // +~====**'DELETE'**====~+
   // +~====************====~+
 
-  // buildDelete=>
   buildDelete(queryObj) {
     if(!queryObj.where) {
       this.fatalError = true;
@@ -815,7 +796,7 @@ module.exports = class JsonQL {
     let del = `DELETE FROM ${db}.${table}`;
 
 
-    let where = this.setWhString(queryObj, ' WHERE ');
+    let where = this.setStringArray('where', queryObj, ' WHERE ');
 
     return `${del}${where}`;
   }
@@ -825,7 +806,6 @@ module.exports = class JsonQL {
   // +~====***'TREE MAPPING'***====~+
   // +~====********************====~+
 
-  // buildTreeMap=>
   buildTreeMap(columns, callback) {
 
     let treeMap = []
@@ -856,7 +836,6 @@ module.exports = class JsonQL {
 
   }
 
-  // detectLeafStatus=>
   detectLeafStatus(columns, tree, index = 0) {
 
     if(tree[index+1] !== undefined) {
@@ -900,20 +879,22 @@ module.exports = class JsonQL {
   // +~====*****'NAME ROUTER'*****====~+
   // +~====***********************====~+
 
-  // nameRouter=>
+  // This is one of the most important functions in jseq
+  // Every 'name' value comes through here and so this is
+  // where we check the column names are valid.
+  //
+  // It's also where we detect the format of the name value, whether
+  // it's a function string or a JQString etc.
+
   nameRouter(col, dbTable = this.masterDbTable) {
 
     const {
       db,
-      table,
-      as,
-      sort,
-      limit,
-      where
+      table
     } = this.splitSelectItems(col, dbTable)
 
     // Has => so it's a function string
-    if(/^\w+\=\>/.test(col.name)) {
+    if(/^\w+=>/.test(col.name)) {
       if(!col.as) {
         this.errors.push('There must be an "as" value for every function selection: ', col.name)
         // this.fatalError = true
@@ -937,6 +918,10 @@ module.exports = class JsonQL {
       if(!col.where) {
         this.errors.push('There must be a "where" value for every db.table selection: ', col.name)
         // this.fatalError = true
+        return null
+      }
+      if(!(this.schema[db] || {})[table]) {
+        this.errors.push(`${db}.${table} not found in schema`)
         return null
       }
       return col.name
@@ -969,7 +954,6 @@ module.exports = class JsonQL {
   // +~====**'PARSERS'**====~+
   // +~====*************====~+
 
-  // parseNestedJson=>
   parseNestedJson(queryObj) {
     const {db, table} = this.splitDbAndTableNames(queryObj.name);
 
@@ -978,10 +962,10 @@ module.exports = class JsonQL {
       return null
     }
 
-    let where = this.setWhString(queryObj, ' WHERE ');
+    let where = this.setStringArray('where', queryObj, ' WHERE ');
 
     let sort = '';
-    if(queryObj.sort && this.splitStringValidation(queryObj.sort)) {
+    if(queryObj.sort && this.plainStringValid(queryObj.sort)) {
       sort = ` ORDER BY ${queryObj.sort}`;
     }
 
@@ -1007,9 +991,8 @@ module.exports = class JsonQL {
   // +~====******'FUNCTIONS'********====~+
   // +~====*************************====~+
 
-  // funcString=>
   funcString(name, data) {
-    if(!this.plainStringValid(name)) return;
+    if(!this.plainPartValid(name)) return;
     const func = name.slice(0, name.indexOf('=>'))
 
     let args = name.slice(
@@ -1022,7 +1005,6 @@ module.exports = class JsonQL {
     return this.convertFunc(func, args, data);
   }
 
-  // convertFunc=>
   convertFunc(func, args, data) {
 
     let newArgs = args;
@@ -1060,7 +1042,6 @@ module.exports = class JsonQL {
     return str;
   }
 
-  // getArgPositions=>
   getArgPositions(args) {
     let count = 0;
     let counts = [];
@@ -1123,7 +1104,6 @@ module.exports = class JsonQL {
     return [...arr, arg.toUpperCase() + '(' + newArgs.slice(start, end).join() + ')'];
   }
 
-  // flattenArgs=>
   flattenArgs(newArgs, argPositions) {
     let start = argPositions[0][0];
     let end = argPositions[0][1];
@@ -1239,24 +1219,21 @@ module.exports = class JsonQL {
   // +~====**'JSONQUERY FUNCTIONS'**====~+
   // +~====*************************====~+
 
-  // extractColFromJQString=>
   extractColFromJQString(db, table, jQString) {
     let column = jQString.slice(1, jQString.search(/[\.\[]/));
     return column;
   }
 
-  // jQExtractNoTable=>
   jQExtractNoTable(jQStr) {
-    if(!this.plainStringValid(jQStr)) return;
+    if(!this.plainPartValid(jQStr)) return;
     const regx = /(\$\w+)|(\[\d\])|(\.\w+)|(\[\?[\w\s@#:;{},.!"£$%^&*()/?|`¬\-=+~]*\])/g
     const matches = jQStr.match(regx);
     const name = `${matches[0].slice(1)}`
     return `JSON_UNQUOTE(JSON_EXTRACT(${name}, ${this.jQStringMaker(name, matches)}))`;
   }
 
-  // jQExtract=>
   jQExtract(db, table, jQStr) {
-    if(!this.plainStringValid(jQStr)) return;
+    if(!this.plainPartValid(jQStr)) return;
     const regx = /(\$\w+)|(\[\d\])|(\.\w+)|(\[\?[\w\s@#:;{},.!"£$%^&*()/?|`¬\-=+~]*\])/g
     const matches = jQStr.match(regx);
     if(!this.columnValid(db, table, matches[0].slice(1))) return;
@@ -1264,7 +1241,6 @@ module.exports = class JsonQL {
     return `JSON_UNQUOTE(JSON_EXTRACT(${name}, ${this.jQStringMaker(name, matches)}))`;
   }
 
-  // jQStringMaker=>
   jQStringMaker(name, matches) {
     let result = matches.reduce((arr, match, i) => {
       return [...arr, this.jQString(name, match, arr[i-1])];
@@ -1273,7 +1249,6 @@ module.exports = class JsonQL {
     return result[result.length - 1];
   }
 
-  // jQString=>
   jQString(name, string, prevString) {
     let nameReg = /\$\w+/;
     let index = /\[\d\]/;
@@ -1298,7 +1273,6 @@ module.exports = class JsonQL {
     }
   }
 
-  // jQSet=>
   jQSet(db, table, jQStr, value) {
     const regx = /(\$\w+)|(\[\d\])|(\.\w+)|(\[\?[\w\s@#:;{},.!"£$%^&*()/?|`¬\-=+~]*\])/g
     const matches = jQStr.match(regx);
@@ -1310,7 +1284,6 @@ module.exports = class JsonQL {
   // +~====**'UTILITIES'**====~+
   // +~====***************====~+
 
-  // splitSelectItems=>
   splitSelectItems(col, dbTable) {
     const {db, table} = this.splitDbAndTableNames(dbTable)
 
@@ -1349,26 +1322,51 @@ module.exports = class JsonQL {
 
   }
 
-  // setWhString=>
-  setWhString(queryObj, type) {
-    let wheres = [];
-    if((queryObj.where || []).length > 0) {
-      queryObj.where.forEach(wh => {
-        if(wh.length && typeof wh === 'object') {
-          let ws = [];
-          wh.forEach(w => !this.splitStringValidation(w) || ws.push(w))
-          wheres.push(ws.join(' OR '));
+  setLimitString(limit) {
+    if(limit.length > 0) {
+      if(limit.length > 2) {
+        this.errors.push('The limit param must only have two items')
+        this.fatalError = true
+        return ''
+      }
+      if(typeof limit[0] !== 'number' || typeof limit[1] !== 'number') {
+        this.errors.push('Both items in a limit param must be numbers')
+        this.fatalError = true
+        return ''
+      }
+
+      return ` LIMIT ${limit.join()}`
+
+    }
+  }
+
+  setString(string, stringPart) {
+
+    if(!this.plainStringValid(string)) return ''
+
+    return stringPart + string
+
+  }
+
+  setStringArray(type, queryObj, stringPart) {
+
+    let items = [];
+    if((queryObj[type] || []).length > 0) {
+      queryObj[type].forEach(st => {
+        if(st.length && typeof st === 'object') {
+          let itms = [];
+          st.forEach(s => !this.plainStringValid(s) || itms.push(s))
+          items.push(itms.join(' OR '));
           return;
         }
-        if(!this.splitStringValidation(wh)) return;
-        wheres.push(wh);
+        if(!this.plainStringValid(st)) return;
+        items.push(st);
       });
     }
 
-    return wheres.length > 0 ? (type || 'WHERE ') + wheres.join(' AND ') : '';
+    return items.length > 0 ? stringPart + items.join(' AND ') : '';
   }
 
-  // splitDbAndTableNames=>
   splitDbAndTableNames(name) {
     const dbTable = /^\w+\.\w+$/
     if(!dbTable.test(name)) {
@@ -1386,52 +1384,38 @@ module.exports = class JsonQL {
   // +~====**'VALIDATION'**====~+
   // +~====****************====~+
 
-  // splitStringValidation=>
-  splitStringValidation(whStr) {
-    const parts = whStr.split(' ');
-    // const parts = whStr.match(/[\$\w.]+|['`"].+['`"]|\\|\+|>=|<=|=>|>|<|-|\*|=/g);
+  plainStringValid(plainStr) {
+    const parts = plainStr.split(' ');
     let valid = false;
-
-    const dbTableColumn = /^\w+\.\w+\.\w+$/;
-    const twoSelections = /^\w+\.\w+$/;
-    const column = /^\w+$/;
-    const string = /^['"`].+['"`]$/g;
 
     parts.forEach(part => {
 
-      // if the part meets any of these conditions it will go to true
-      if(this.plainStringValid(part)) {
+      if(this.plainPartValid(part)) {
         valid = true;
       }
 
-      //
-      // TODO: decide what you should do here this validation was causing more
-      // problems than it fixed but it should probably be little more rigerous than it is now.
-      //
-      // if(dbTableColumn.test(part) && this.dbTableColumnValid(part, false)) {
-      //   valid = true;
-      // }
-      // this.dbTableNames.forEach(dbTObj => {
-      //   if(twoSelections.test(part) && this.tableColumnValid(dbTObj.db, part, false)) {
-      //     valid = true;
-      //   }
-      //   if(column.test(part) && this.columnValid(dbTObj.db, dbTObj.table, part, false)) {
-      //     valid = true;
-      //   }
-      // });
-
-      if(!valid) {
-        this.errors.push(part + ' didnt pass validation');
-        this.fatalError = true;
-      }
     });
     return valid;
   }
 
-  // plainStringValid=>
-  plainStringValid(string) {
-    const regex = /(drop )|;|(update )|( truncate)/gi;
-    if(regex.test(string)) {
+  plainPartValid(string) {
+
+    // All the words we shouldn't use...
+    const regx = [
+      /;/gi,
+      /--/gi,
+      /^drop$|\s+drop$|^drop\s+|\s+drop\s+/gi,
+      /^truncate$|\s+truncate$|^truncate\s+|\s+truncate\s+/gi,
+      /^delete$|\s+delete$|^delete\s+|\s+delete\s+/gi,
+      /^update$|\s+update$|^update\s+|\s+update\s+/gi,
+      /^create$|\s+create$|^create\s+|\s+create\s+/gi,
+      /^alter$|\s+alter$|^alter\s+|\s+alter\s+/gi,
+      /^insert$|\s+insert$|^insert\s+|\s+insert\s+/gi,
+      /^select$|\s+select$|^select\s+|\s+select\s+/gi,
+      /^grant$|\s+grant$|^grant\s+|\s+grant\s+/gi
+    ]
+
+    if(regx.find(r => r.test(string))) {
       this.errors.push('The string \'' + string + '\' is not allowed');
       this.fatalError = true;
       return false;
@@ -1444,7 +1428,6 @@ module.exports = class JsonQL {
   // +~====**'SCHEMA VALIDATION'**====~+
   // +~====***********************====~+
 
-  // dbTableValid=>
   dbTableValid(string) {
     // We don't want to push an error here because this could be a valid table.column
     let m = string.match(/\w+/g);
@@ -1454,17 +1437,6 @@ module.exports = class JsonQL {
     return true;
   }
 
-  // dbTableColumnValid=>
-  dbTableColumnValid(string, pushToErrors = true) {
-    let m = string.match(/\w+/g);
-    if(!((this.schema[m[0]] || {})[m[1]] || {})[m[2]]) {
-      if(pushToErrors) this.errors.push(`${m[0]} ${m[1]} ${m[2]} not found in schema`);
-      return false
-    }
-    return true;
-  }
-
-  // tableColumnValid=>
   tableColumnValid(db, string, pushToErrors = true) {
     let m = string.match(/\w+/g);
     if(!((this.schema[db] || {})[m[0]] || {})[m[1]]) {
@@ -1474,7 +1446,6 @@ module.exports = class JsonQL {
     return true;
   }
 
-  // columnValid=>
   columnValid(db, table, string, pushToErrors = true) {
     if(!((this.schema[db] || {})[table] || {})[string]) {
       if(pushToErrors) this.errors.push(`${db} ${table} ${string} column not in schema`);
