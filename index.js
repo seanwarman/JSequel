@@ -998,7 +998,8 @@ module.exports = class JsonQL {
     let args = name.slice(
       func.length + 2
     ).match(
-      /[`'"][\[{].*[}\]]['`"]|\w+\=\>|\(|\)|[`"'](.*?)[`"']|\$*(\w+\.)+\w+|\$*\w+|\\|\/|\+|>=|<=|=>|>|<|-|\*|=/g
+      // /[`'"][[{].*[}\]]['`"]|\w+=>|\(|\)|'(.*?)'|"(.*?)"|`(.*?)`|\$*(\w+\.)+\w+|\$*\w+|\\|\/|\+|>=|<=|=>|>|<|-|\*|=/g
+      /{.*?}|\[.*?\]|\w+=>|\(|\)|'(.*?)'|"(.*?)"|`(.*?)`|\$*(\w+\.)+\w+|\$*\w+|\\|\/|\+|>=|<=|=>|>|<|-|\*|=/g
     );
 
 
@@ -1385,7 +1386,9 @@ module.exports = class JsonQL {
   // +~====****************====~+
 
   plainStringValid(plainStr) {
-    const parts = plainStr.split(' ');
+    const parts = plainStr.match(
+      /{.*?}|\[.*?\]|\w+=>|\(|\)|'(.*?)'|"(.*?)"|`(.*?)`|\$*(\w+\.)+\w+|\$*\w+|\\|\/|\+|>=|<=|=>|>|<|-|\*|=/g
+    );
     let valid = false;
 
     parts.forEach(part => {
@@ -1399,6 +1402,8 @@ module.exports = class JsonQL {
   }
 
   plainPartValid(string) {
+
+    const quoted = /'(.*?)'|"(.*?)"|`(.*?)`/g;
 
     // All the words we shouldn't use...
     const regx = [
@@ -1414,6 +1419,14 @@ module.exports = class JsonQL {
       /^select$|\s+select$|^select\s+|\s+select\s+/gi,
       /^grant$|\s+grant$|^grant\s+|\s+grant\s+/gi
     ]
+
+
+    if(quoted.test(string)) {
+
+      // If a string is in quotes we can ignore it...
+      return true
+
+    }
 
     if(regx.find(r => r.test(string))) {
       this.errors.push('The string \'' + string + '\' is not allowed');
