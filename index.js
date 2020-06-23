@@ -203,7 +203,7 @@ module.exports = class JsonQL {
   // +~====********====~+
 
   setValueString(value) {
-    if(!value) return null;
+    if(!value && value !== 0) return null;
     if(typeof value === 'object' && value.forEach) {
       return `JSON_ARRAY(${value.map(val => this.setValueString(val)).join()})`;
     }
@@ -225,7 +225,7 @@ module.exports = class JsonQL {
   }
 
   setJQString(db, table, key, value) {
-    if(!value) return;
+    if(!value && value !== 0) return;
     let column = this.extractColFromJQString(db, table, key);
 
     value = `IF(
@@ -252,7 +252,7 @@ module.exports = class JsonQL {
         val = this.setValueString(data[key]);
         col = key;
       }
-      if(!val) return;
+      if(!val && val !== 0) return;
       if(!this.columnValid(db, table, col)) return;
       columns.push(col);
       values.push(val);
