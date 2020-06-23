@@ -1,6 +1,6 @@
 {
   "name": "jsequel",
-  "version": "2.91.0",
+  "version": "2.91.1",
   "description": "A GraphQL-like json query maker",
   "main": "index.js",
   "directories": {

@@ -119,7 +119,7 @@ module.exports = class JsonQL {
   createSQ(queryObj, data) {
     let query = ''
 
-    if(/^\w+\=\>/.test(queryObj.name)) {
+    if(/^\w+=>/.test(queryObj.name)) {
 
       query = this.funcString(queryObj.name, data)
 
@@ -147,7 +147,7 @@ module.exports = class JsonQL {
   updateSQ(queryObj, data) {
     let query = ''
 
-    if(/^\w+\=\>/.test(queryObj.name)) {
+    if(/^\w+=>/.test(queryObj.name)) {
 
       query = this.funcString(queryObj.name, data)
 
@@ -173,7 +173,7 @@ module.exports = class JsonQL {
   deleteSQ(queryObj) {
     let query = ''
 
-    if(/^\w+\=\>/.test(queryObj.name)) {
+    if(/^\w+=>/.test(queryObj.name)) {
 
       query = this.funcString(queryObj.name)
 
@@ -290,8 +290,6 @@ module.exports = class JsonQL {
       oldSchema = this.convertIntLengths(oldSchema)
     }
 
-
-    let query = []
 
     let newSchema = this.formatJseqSchema()
 
@@ -1099,7 +1097,7 @@ module.exports = class JsonQL {
     return [...arr, customObj];
   }
 
-  parseCustomFunc(arr, arg) {
+  parseCustomFunc(arr, arg, newArgs, start, end) {
     arg = arg.slice(0, -2);
     if(this.customFns[arg]) return [...arr, this.customFns[arg](...newArgs.slice(start, end))];
     return [...arr, arg.toUpperCase() + '(' + newArgs.slice(start, end).join() + ')'];
@@ -1120,7 +1118,7 @@ module.exports = class JsonQL {
 
       newArgs = newArgs.slice(start, end).map(arg => { 
 
-        if(/\w+\=\>/.test(arg)) {
+        if(/\w+=>/.test(arg)) {
           arg = arg.slice(0, -2);
           if(this.customFns[arg]) return this.customFns[arg]();
           return arg.toUpperCase() + '()';
@@ -1163,9 +1161,9 @@ module.exports = class JsonQL {
 
       return newArgs.reduce((arr,arg,i) => {
 
-        if(/\w+\=\>/.test(arg) && i === start-2) {
+        if(/\w+=>/.test(arg) && i === start-2) {
 
-          return this.parseCustomFunc(arr,arg) 
+          return this.parseCustomFunc(arr,arg, newArgs, start, end) 
         }
 
         // If this argument is a custom object selection: '@.thing'
@@ -1193,9 +1191,9 @@ module.exports = class JsonQL {
       return newArgs.reduce((arr,arg,i) => {
 
 
-        if(/\w+\=\>/.test(arg) && i === start-2) {
+        if(/\w+=>/.test(arg) && i === start-2) {
 
-          return this.parseCustomFunc(arr,arg) 
+          return this.parseCustomFunc(arr,arg, newArgs, start, end) 
         }
 
         // If this argument is a custom object selection: '@.thing'
@@ -1221,7 +1219,7 @@ module.exports = class JsonQL {
   // +~====*************************====~+
 
   extractColFromJQString(db, table, jQString) {
-    let column = jQString.slice(1, jQString.search(/[\.\[]/));
+    let column = jQString.slice(1, jQString.search(/[.[]/));
     return column;
   }
 
