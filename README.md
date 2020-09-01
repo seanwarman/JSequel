@@ -11,7 +11,7 @@ All **JSequel** does is make mysql query strings so it's also fast.
 ## Explanation
 
 If you've built an API using the [Serverless Framework](https://serverless.com/), AWS Lambda functions
-or any manage any other kind of serverless backend you'll know that updating development code is long-
+or manage any other kind of serverless backend you'll know that updating development code is long-
 winded and very hard to debug.
 
 Lots of devs have turned to [GraphQL](https://graphql.org/) for this very reason but for
@@ -19,6 +19,8 @@ my particular needs I thought GraphQL was a bit overkill.
 
 **JSequel** is light and fast because all it does is build mysql query strings. This means 
 it can easily be added to your project without disrupting whatever structure you've already built.
+It's also safe, it doesn't allow dangerous strings ('drop', 'truncate', 'grant' etc...) and
+checks every target column against your schema before injecting into the final query.
 
 You don't have to install any frontend framework and it essentially runs from a single object and a 
 schema that you can define where-ever you want to.
@@ -343,30 +345,32 @@ GROUP BY employeeId
 You'll need a schema for your database, this will prevent anyone from injecting dangerous
 SQL into your db without **JSequel** stamping it out.
 
-The structure of your schema object should look like:
+The structure of your schema object might look like:
 
 ```js
 module.exports = {
-  databaseName: {
-    tableName1: {
-      column1: {
+  myDatabase: {
+    users: {
+      id: {
+        primary: true,          // Required
         type: 'string'
       },
-      column2: {
-        type: 'string',
-      }
-    },
-    tableName2: {
-      column1: {
+      name: {
+        type: 'string'
+      },
+      age: {
         type: 'number'
+      },
+      dob: {
+        type: 'date'
       }
     }
   }
-  databaseName2: {
-    // etc...
-  }
 }
 ```
+
+At least one column must have `primary: true`.
+
 Any columns not included in the schema will be automatically omitted from your queries.
 
 The currently allowed `type` values are:
