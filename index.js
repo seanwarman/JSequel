@@ -86,6 +86,13 @@ module.exports = class JsonQL {
 
 
   selectSQ(queryObj) {
+
+    if(!queryObj.columns) return {
+      status: 'error',
+      errors: ['Every Jsequel select must have at least one columns object'],
+      query: ''
+    }
+
     let query = ''
     let treeMap = []
 

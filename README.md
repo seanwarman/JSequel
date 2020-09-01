@@ -8,10 +8,6 @@ stack.
 
 All **JSequel** does is make mysql query strings so it's also fast.
 
-## Warning
-
-**Jsequel** is still in development phase and so is not yet production ready.
-
 ## Explanation
 
 If you've built an API using the [Serverless Framework](https://serverless.com/), AWS Lambda functions
